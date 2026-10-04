@@ -1,98 +1,85 @@
-# 📜 SỔ HỤI - ỨNG DỤNG QUẢN LÝ HỤI MIỀN NAM (MVP)
+# 📜 SỔ HỤI - ỨNG DỤNG QUẢN LÝ HỤI MIỀN NAM (BẢN CHÍNH THỨC 2.0)
 
-> **Minh Bạch - Tiện Lợi - An Toàn - Chuẩn Tập Quán Dân Gian Nam Bộ**
+> **Minh Bạch - Tiện Lợi - An Toàn - Chuẩn Tập Quán Dân Gian Nam Bộ**  
+> *Sẵn sàng hoạt động trên Web, Android (CH Play) và iOS (Apple App Store)*
 
 ---
 
 ## 🌟 1. Giới thiệu tổng quan
-**Sổ Hụi** là ứng dụng di động (Mobile-first Web App) được thiết kế và phát triển chuyên biệt dành cho **Chủ Hụi (Đầu thảo)** và **Hụi Viên (Tay hụi)** theo đúng thuật ngữ và tập quán chơi hụi truyền thống tại miền Nam.
+**Sổ Hụi** là nền tảng quản lý sổ hụi chuyên nghiệp (Multi-tenant SaaS & PWA Mobile App) được thiết kế chuyên biệt dành cho **Chủ Hụi (Đầu thảo)** và **Hụi Viên (Tay hụi)** theo đúng thuật ngữ và tập quán chơi hụi truyền thống tại miền Nam.
 
 ### 🛡️ Tuyên ngôn an toàn cốt lõi:
-> **"Sổ Hụi chỉ là công cụ ghi chép, tính toán toán học, nhắc việc và lưu vết chứng cứ minh bạch. Ứng dụng TUYỆT ĐỐI KHÔNG giữ tiền hộ, không thu hộ tiền, không cung cấp dịch vụ ví điện tử, không bảo lãnh tài chính và không cho vay."**
+> **"Sổ Hụi chỉ là công cụ ghi chép, tính toán toán học, nhắc việc và lưu vết chứng cứ minh bạch giữa các cá nhân theo Nghị định 19/2019/NĐ-CP. Ứng dụng TUYỆT ĐỐI KHÔNG giữ tiền hộ, không thu hộ tiền, không cung cấp dịch vụ ví điện tử, không bảo lãnh tài chính và không cho vay."**
 
 ---
 
-## 👥 2. Đối tượng sử dụng & Luồng màn hình
+## ✨ 2. Các tính năng nổi bật của Bản Chính Thức (Production Ready)
 
-### 2.1. Ba vai trò người dùng:
-1. **Tôi là Chủ Hụi:** Quản lý dây hụi, danh bạ thành viên, khui hụi, quay random, thu tiền, xuất biên nhận và chốt sổ.
-2. **Tôi là Hụi Viên:** Theo dõi các chân hụi đang tham gia, số tiền cần đóng theo kỳ (hụi chết/sống), xem biên nhận và gửi phản hồi.
-3. **Tôi vừa là Chủ vừa là Hụi Viên (Hybrid):** Chuyển đổi linh hoạt giữa các dây mình làm chủ và các chân hụi mình góp ở nơi khác.
+1. **Hệ thống Tài khoản Riêng biệt (Multi-User Data Isolation):**
+   - Bất kỳ ai cũng có thể tự đăng ký tài khoản Chủ hụi hoặc Hụi viên bằng Số điện thoại.
+   - Dữ liệu sổ hụi của từng tài khoản được cách ly an toàn 100%, bảo mật tuyệt đối.
+   - Hỗ trợ chuyển đổi giữa dữ liệu thực tế và dữ liệu mẫu (demo).
 
-### 2.2. Sơ đồ luồng ứng dụng:
-```
-[Khởi động] ──► [Chọn vai trò: Chủ / Viên / Cả hai]
-                      │
-                      ├──► [Dashboard Chủ Hụi]
-                      │      ├── Danh bạ hụi viên (Chống trùng SĐT, Cảnh báo nợ, Gộp hồ sơ)
-                      │      ├── Tạo dây hụi mới (Chọn người từ danh bạ, phân bổ số phần)
-                      │      ├── Chi tiết dây & Quản lý kỳ hụi
-                      │      ├── Khui hụi:
-                      │      │     ├─ 🎲 Quay Random (Lồng cầu quay số, loại trừ nợ, lý do quay lại)
-                      │      │     ├─ 🏷️ Kêu hụi / Bỏ lãi
-                      │      │     └─ 🗳️ Bỏ thăm kín
-                      │      ├── Bảng thu tiền & Tự động tính Hụi sống / Hụi chết
-                      │      └── Biên nhận điện tử (Mộc đỏ, số tiền bằng chữ, in PDF/Zalo, xuất Excel)
-                      │
-                      ├──► [Dashboard Hụi Viên]
-                      │      ├── Dây đang chơi & Tiến độ
-                      │      ├── Cảnh báo tiền cần nộp kỳ tới
-                      │      ├── Kho biên nhận điện tử
-                      │      └── Gửi phản hồi / Báo sai số tiền cho chủ hụi
-                      │
-                      ├──► [Cẩm nang chơi hụi] (13 chuyên đề kiến thức, pháp lý, an toàn)
-                      └──► [Nhật ký kiểm toán] (Lưu vết mọi thay đổi dữ liệu)
-```
+2. **Tích hợp VietQR Chuẩn Ngân Hàng Quốc Gia (NAPAS 24/7):**
+   - Chủ hụi cấu hình tài khoản ngân hàng (Vietcombank, MB, Techcombank, BIDV, ACB...).
+   - Khi tạo bảng thu tiền hoặc gửi biên nhận, app **tự động sinh mã VietQR động** kèm đúng số tiền và nội dung chuyển khoản `[Ten] dong hui [TenDay] ky [X]`.
+   - Hụi viên chỉ cần quét mã QR bằng app ngân hàng là chuyển khoản chính xác 100%.
+
+3. **Bảo mật Mã PIN Khóa Sổ (App Lock):**
+   - Cài đặt mã PIN 4-6 số bảo vệ riêng tư khi cho người khác mượn điện thoại.
+
+4. **Sao lưu & Phục hồi Toàn diện (Data Backup & Restore):**
+   - Xuất file sao lưu `.sohui` / `.json` về máy tính, Zalo, Google Drive bất cứ lúc nào.
+   - Khôi phục dữ liệu tức thì khi chuyển sang điện thoại hoặc máy tính mới.
+
+5. **Đầy đủ Nghiệp vụ Hụi Nam Bộ:**
+   - 3 hình thức khui: Kêu hụi (Bỏ lãi), Bỏ thăm kín, Quay Random ngẫu nhiên (có lồng cầu quay số và lọc nợ).
+   - Tự động phân biệt Hụi Sống (trừ thăm) và Hụi Chết (nộp đủ gốc 100%).
+   - Biên nhận điện tử có dấu mộc đỏ, đọc tiền bằng chữ tiếng Việt, in PDF và xuất Excel.
+   - Cẩm nang 13 chuyên đề pháp lý và hợp đồng hụi mẫu theo Nghị định 19/2019/NĐ-CP.
 
 ---
 
-## 📊 3. Data Model Chi Tiết
+## 🚀 3. Hướng dẫn sử dụng & Triển khai
 
-| Model | Mục đích | Ràng buộc chính |
-|---|---|---|
-| **`User`** | Tài khoản đăng nhập & vai trò | `owner`, `member`, `hybrid` |
-| **`MemberProfile`** | Hồ sơ hụi viên gốc trong danh bạ dùng chung | **SĐT là DUY NHẤT (không cho tạo trùng)**, mức uy tín 1-5 sao, lịch sử trễ hạn, cảnh báo rủi ro, hỗ trợ gộp hồ sơ |
-| **`HuiGroup`** | Dây hụi | Mức góp, số phần, chu kỳ (ngày/tuần/nửa tháng/tháng), hình thức khui, tiền thảo |
-| **`HuiGroupMember`** | Thành viên tham gia dây cụ thể | Số phần tham gia, mảng các kỳ đã hốt (`hotedCycles`), trạng thái sống/chết/nợ |
-| **`HuiCycle`** | Kỳ hụi | Kỳ số mấy, ngày mở, người hốt, mức thăm trúng, tổng tiền thu, tiền thảo, trạng thái mở/chốt/hủy |
-| **`Payment`** | Giao dịch đóng tiền | Diện hụi chết (đóng đủ 100% gốc) hay hụi sống (trừ mức thăm), tiền mặt / chuyển khoản, mã giao dịch |
-| **`Receipt`** | Biên nhận / Phiếu thu điện tử | Mã phiếu thu chuẩn `BN-YYYYMM-XXX`, họ tên, số tiền số và chữ tiếng Việt, mộc "ĐÃ THU TIỀN" |
-| **`RandomDraw`** | Kết quả quay random minh bạch | Danh sách đủ chuẩn, danh sách bị loại (có nợ), người trúng, thời gian, lý do quay lại |
-| **`ActivityLog`** | Nhật ký kiểm toán bất biến | Người thực hiện, hành động, đối tượng, dữ liệu cũ (`oldData`), dữ liệu mới (`newData`), timestamp |
-| **`GuideArticle`** | Cẩm nang kiến thức chuẩn miền Nam | 13 chuyên đề phân loại theo thuật ngữ, an toàn, pháp lý, mẫu thỏa thuận |
-| **`Notification`** | Hệ thống thông báo | Nhắc nợ, kết quả khui hụi |
-
----
-
-## 📐 4. Công Thức Tính Tiền Chuẩn Miền Nam
-
-1. **Tiền đóng Hụi Sống (Chưa hốt):**
-   $$\text{Tiền nộp} = \text{Số chân} \times (\text{Mức góp cơ bản} - \text{Tiền thăm trúng})$$
-
-2. **Tiền đóng Hụi Chết (Đã từng hốt ở kỳ trước):**
-   $$\text{Tiền nộp} = \text{Số chân} \times \text{Mức góp cơ bản}$$
-
-3. **Tiền Người hốt hụi thực nhận:**
-   $$\text{Tổng tiền hốt} = \sum(\text{Hụi sống}) + \sum(\text{Hụi chết}) - \text{Tiền thảo chủ hụi} - (\text{Phần của người hốt tự trừ})$$
-
----
-
-## 🚀 5. Hướng dẫn chạy và sử dụng ứng dụng
-
-### 5.1. Chạy máy chủ tĩnh cục bộ:
-Ứng dụng được viết hoàn toàn bằng Pure Modern Web Standards (HTML5, CSS3, ES6 Modules) không phụ thuộc external network:
-
+### 3.1. Chạy trên máy tính cá nhân (Offline):
 ```bash
 cd /Users/hatrungnhu/Downloads/so-hui-app
 node server.cjs
 ```
-Truy cập trình duyệt: **`http://localhost:3456`**
+Mở trình duyệt: `http://localhost:3456`
 
-### 5.2. Dữ liệu Demo có sẵn:
-- **Chủ Hụi:** Nguyễn Thị Bảy (Cô Bảy Chủ Thảo - 0918123456)
-- **Hụi Viên:** Trần Văn Ba (Anh Ba Khía - 0909888999)
-- **Chủ kiêm Hụi Viên:** Lê Thị Út Lành (Chị Út - 0987654321)
-- **Hụi viên cảnh báo nợ:** Đỗ Văn Mười (Anh Mười Cò Đất - Từng trễ 3 kỳ)
-- **Dây 1:** Dây 2 Triệu Chợ Chiều Vĩnh Kim (Kêu hụi bỏ lãi, đang mở Kỳ 4)
-- **Dây 2:** Dây 5 Triệu Tương Trợ Miệt Vườn (Quay Random ngẫu nhiên, không lãi)
-- **Dây 3:** Dây Tuần 500k Chị Em Tiệm May (Bỏ thăm kín)
+### 3.2. Đưa lên Web Online (Miễn phí 100%):
+- **Vercel:** Chạy `npx vercel --prod`
+- **Netlify:** Kéo thả thư mục vào [app.netlify.com/drop](https://app.netlify.com/drop)
+
+### 3.3. Đóng gói cho Android (Google Play) & iOS (App Store):
+Xem tài liệu hướng dẫn chi tiết từng bước tại:
+👉 [`docs/HUONG_DAN_DANG_APP_IOS_VA_CHPLAY.md`](./docs/HUONG_DAN_DANG_APP_IOS_VA_CHPLAY.md)
+
+---
+
+## 📁 4. Cấu trúc Dự án
+
+```
+so-hui-app/
+├── index.html                   # Ứng dụng độc lập chạy được ngay trên mọi trình duyệt
+├── manifest.json                # Cấu hình PWA cài đặt vào điện thoại
+├── sw.js                        # Service Worker hỗ trợ Offline 100%
+├── capacitor.config.json        # Cấu hình đóng gói iOS & Android Native
+├── package.json                 # Kịch bản build và công cụ
+├── vercel.json & netlify.toml   # Cấu hình Cloud Hosting
+├── icons/                       # Bộ icon độ phân giải cao (192, 512, SVG)
+├── css/
+│   └── app.css                  # Hệ thống giao diện bản sắc miền Nam
+├── js/
+│   ├── app.js                   # Bộ điều hướng & Controller chính
+│   ├── store.js                 # Quản lý Đa tài khoản, Data Isolation, VietQR, PIN, State
+│   ├── utils.js                 # Tiện ích, VietQR API, xuất file Excel/JSON, đọc tiền tiếng Việt
+│   ├── guide-data.js            # 13 bài cẩm nang kiến thức & pháp lý
+│   ├── mock-data.js             # Bộ dữ liệu mẫu tham khảo
+│   └── views/                   # 10 màn hình giao diện chuyên sâu
+└── docs/
+    ├── DESIGN_SPEC.md           # Đặc tả kiến trúc kỹ thuật & tài chính
+    └── HUONG_DAN_DANG_APP_IOS_VA_CHPLAY.md  # Hướng dẫn xuất bản App Store & CH Play
+```

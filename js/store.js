@@ -16,6 +16,7 @@ import {
   INITIAL_ACTIVITY_LOGS,
   INITIAL_NOTIFICATIONS
 } from './mock-data.js';
+import { cloudSync } from './cloud-sync.js';
 
 class SoHuiStore {
   constructor() {
@@ -206,6 +207,33 @@ class SoHuiStore {
     };
   }
 
+  createFreshLedgerData(account) {
+    return {
+      users: [account],
+      currentUser: account,
+      currentRole: account.role || 'owner',
+      profiles: [],
+      groups: [],
+      groupMembers: [],
+      cycles: [],
+      payments: [],
+      receipts: [],
+      randomDraws: [],
+      logs: [
+        {
+          id: 'log-init-' + Date.now(),
+          action: 'INIT_ACCOUNT',
+          actorName: account.fullName,
+          targetType: 'Account',
+          targetId: account.id,
+          description: `Khởi tạo sổ hụi thực tế cho ${account.fullName}`,
+          timestamp: new Date().toISOString().replace('T', ' ').substr(0, 19)
+        }
+      ],
+      notifications: []
+    };
+  }
+
   saveAccountData(accountId, data) {
     try {
       localStorage.setItem(this.getAccountStorageKey(accountId), JSON.stringify(data));
@@ -218,6 +246,9 @@ class SoHuiStore {
     try {
       this.state = newState;
       this.saveAccountData(this.currentAccount.id, this.state);
+      if (typeof cloudSync !== 'undefined' && cloudSync.scheduleSync) {
+        cloudSync.scheduleSync(this.currentAccount, this.state);
+      }
       this.notifyListeners();
     } catch (e) {
       console.error('Lỗi khi lưu state:', e);
@@ -237,8 +268,8 @@ class SoHuiStore {
     }
   }
 
-  // --- 3. ĐĂNG KÝ, ĐĂNG NHẬP, ĐĂNG XUẤT ---
-  registerAccount(data) {
+  // --- 3. ĐĂNG KÝ, ĐĂNG NHẬP, ĐĂNG XUẤT (HYBRID LOCAL + CLOUD) ---
+  async registerAccount(data) {
     const accounts = this.getAccounts();
     const cleanPhone = this.normalizePhone(data.phone);
 
@@ -279,9 +310,17 @@ class SoHuiStore {
     accounts.push(newAccount);
     this.saveAccounts(accounts);
 
-    // Nếu người dùng chọn nạp dữ liệu mẫu để thử nghiệm
+    let initialData;
     if (data.seedDemoData) {
-      this.saveAccountData(newAccountId, this.getDefaultDemoData());
+      initialData = this.getDefaultDemoData();
+    } else {
+      initialData = this.createFreshLedgerData(newAccount);
+    }
+    this.saveAccountData(newAccountId, initialData);
+
+    // Đồng bộ lên Cloud ngầm
+    if (typeof cloudSync !== 'undefined' && cloudSync.registerCloud) {
+      cloudSync.registerCloud(newAccount, initialData).catch(err => console.warn('Lỗi sync cloud:', err));
     }
 
     // Tự động đăng nhập
@@ -289,20 +328,73 @@ class SoHuiStore {
     return newAccount;
   }
 
-  login(identifier, password) {
+  async login(identifier, password) {
     const accounts = this.getAccounts();
     const cleanId = identifier.trim().replace(/[\s.-]/g, '');
-    const account = accounts.find(a =>
+    let account = accounts.find(a =>
       (this.normalizePhone(a.phone) === this.normalizePhone(cleanId) || (a.email && a.email.toLowerCase() === identifier.toLowerCase())) &&
       a.password === password
     );
 
-    if (!account) {
-      throw new Error('Số điện thoại/Email hoặc mật khẩu không chính xác!');
+    // Trường hợp 1: Tài khoản có sẵn trên thiết bị này
+    if (account) {
+      this.loginWithAccount(account);
+      // Kéo dữ liệu mới nhất từ Cloud về nếu có
+      if (!account.isDemo && typeof cloudSync !== 'undefined' && cloudSync.pullLedger) {
+        cloudSync.pullLedger(account.phone, account.password).then(cloudLedger => {
+          if (cloudLedger) {
+            this.state = cloudLedger;
+            this.saveAccountData(account.id, cloudLedger);
+            this.notifyListeners();
+          }
+        }).catch(() => {});
+      }
+      return account;
     }
 
-    this.loginWithAccount(account);
-    return account;
+    // Trường hợp 2: Đăng nhập trên thiết bị mới -> Kết nối Cloud tải dữ liệu về!
+    if (typeof cloudSync !== 'undefined' && cloudSync.loginCloud) {
+      const cloudRes = await cloudSync.loginCloud(cleanId, password);
+      if (cloudRes && cloudRes.account) {
+        const cloudAcc = cloudRes.account;
+        accounts.push(cloudAcc);
+        this.saveAccounts(accounts);
+
+        const cloudLedger = cloudRes.ledger || this.createFreshLedgerData(cloudAcc);
+        this.saveAccountData(cloudAcc.id, cloudLedger);
+
+        this.loginWithAccount(cloudAcc);
+        return cloudAcc;
+      }
+    }
+
+    throw new Error('Số điện thoại/Email hoặc mật khẩu không chính xác!');
+  }
+
+  async resetPassword(phone, newPassword) {
+    const cleanPhone = this.normalizePhone(phone);
+    if (!cleanPhone || !newPassword || newPassword.length < 3) {
+      throw new Error('Vui lòng nhập số điện thoại và mật khẩu mới (ít nhất 3 ký tự)!');
+    }
+
+    const accounts = this.getAccounts();
+    const acc = accounts.find(a => this.normalizePhone(a.phone) === cleanPhone);
+    if (acc) {
+      acc.password = newPassword;
+      this.saveAccounts(accounts);
+    }
+
+    if (typeof cloudSync !== 'undefined' && cloudSync.resetPasswordCloud) {
+      await cloudSync.resetPasswordCloud(cleanPhone, newPassword);
+    }
+
+    return true;
+  }
+
+  syncWithCloudNow() {
+    if (this.currentAccount && !this.currentAccount.isDemo && typeof cloudSync !== 'undefined') {
+      return cloudSync.pushLedger(this.currentAccount.phone, this.currentAccount.password, this.state);
+    }
   }
 
   loginWithAccount(account) {

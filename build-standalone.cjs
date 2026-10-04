@@ -16,11 +16,13 @@ const utils = fs.readFileSync(path.join(baseDir, 'js/utils.js'), 'utf8')
 function cleanImports(code) {
   return code
     .replace(/import\s+[\s\S]*?from\s+['"][^'"]+['"];?/g, '')
+    .replace(/export class /g, 'class ')
     .replace(/export function /g, 'function ')
     .replace(/export const /g, 'const ')
     .replace(/export default /g, '');
 }
 
+const cloudSyncCode = cleanImports(fs.readFileSync(path.join(baseDir, 'js/cloud-sync.js'), 'utf8'));
 const storeCode = cleanImports(fs.readFileSync(path.join(baseDir, 'js/store.js'), 'utf8'));
 const authView = cleanImports(fs.readFileSync(path.join(baseDir, 'js/views/auth-view.js'), 'utf8'));
 const settingsView = cleanImports(fs.readFileSync(path.join(baseDir, 'js/views/settings-view.js'), 'utf8'));
@@ -84,6 +86,8 @@ ${guideData}
 ${mockData}
 
 ${utils}
+
+${cloudSyncCode}
 
 ${storeCode}
 

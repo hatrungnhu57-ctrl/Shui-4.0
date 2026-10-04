@@ -1,0 +1,37 @@
+{
+  "name": "so-hui-app",
+  "version": "2.0.0",
+  "description": "Ứng dụng Quản lý Sổ Hụi Miền Nam - Ghi chép, tính tiền hụi sống/chết, khui hụi, VietQR và lưu chứng cứ an toàn.",
+  "main": "server.cjs",
+  "scripts": {
+    "start": "node server.cjs",
+    "dev": "node server.cjs",
+    "build": "node build-standalone.cjs",
+    "generate:icons": "node generate-png.cjs",
+    "cap:sync": "npx cap sync",
+    "cap:android": "npx cap open android",
+    "cap:ios": "npx cap open ios",
+    "cap:build:android": "npx cap sync android && cd android && ./gradlew assembleRelease",
+    "cap:build:ios": "npx cap sync ios"
+  },
+  "keywords": [
+    "so-hui",
+    "quan-ly-hui",
+    "chit-fund",
+    "vietqr",
+    "vietnam",
+    "pwa",
+    "capacitor",
+    "ios",
+    "android"
+  ],
+  "author": "Sổ Hụi Việt Nam",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/ios": "^6.0.0"
+  }
+}

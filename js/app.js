@@ -4,7 +4,8 @@
  */
 
 import { store } from './store.js';
-import { showToast } from './utils.js';
+import { showToast, escapeHtml } from './utils.js';
+import { cloudSync } from './cloud-sync.js';
 import { renderRoleSelector } from './views/role-selector.js';
 import { renderAuthView } from './views/auth-view.js';
 import { renderSettingsView } from './views/settings-view.js';
@@ -28,6 +29,10 @@ class SoHuiApp {
     window.addEventListener('hashchange', () => this.handleRoute());
 
     store.subscribe(() => {
+      this.updateHeader();
+    });
+
+    cloudSync.onSyncStatusChange(() => {
       this.updateHeader();
     });
 
@@ -221,16 +226,33 @@ class SoHuiApp {
       roleIcon = '🧕';
     }
 
+    const isOnline = cloudSync.isOnline;
+    const isSyncing = cloudSync.syncStatus === 'syncing';
+    let cloudIcon = isOnline ? '🟢' : '🟡';
+    let cloudTooltip = isOnline ? 'Đám mây kết nối trực tuyến' : 'Đang ngoại tuyến (Offline)';
+    if (isSyncing) {
+      cloudIcon = '🔄';
+      cloudTooltip = 'Đang đồng bộ Đám mây...';
+    }
+
     headerRight.innerHTML = `
+      <div id="btn-cloud-status-header" title="${cloudTooltip}" style="cursor: pointer; font-size: 11px; background: rgba(0,0,0,0.04); padding: 4px 6px; border-radius: 12px; display: flex; align-items: center; gap: 4px;">
+        <span style="${isSyncing ? 'animation: spin 1s linear infinite;' : ''}">${cloudIcon}</span>
+        <span style="font-weight: 600; color: var(--text-muted); font-size: 11px;">Cloud</span>
+      </div>
       <div class="role-tag ${roleClass}" id="btn-change-role" title="Bấm để đổi vai trò">
         <span>${roleIcon}</span>
-        <span>${acc.fullName.split(' ')[0]} (${roleText})</span>
+        <span>${escapeHtml(acc.fullName.split(' ')[0])} (${roleText})</span>
         <span style="font-size: 10px; opacity: 0.7;">▼</span>
       </div>
       <button class="btn btn-sm btn-outline btn-circle" id="btn-goto-settings-header" title="Cài đặt & Sao lưu">
         ⚙️
       </button>
     `;
+
+    document.getElementById('btn-cloud-status-header')?.addEventListener('click', () => {
+      window.location.hash = '#settings';
+    });
 
     document.getElementById('btn-change-role')?.addEventListener('click', () => {
       window.location.hash = '#select-role';
