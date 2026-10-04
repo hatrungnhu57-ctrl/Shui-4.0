@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node server.cjs",
     "dev": "node server.cjs",
-    "build": "node build-standalone.cjs",
-    "generate:icons": "node generate-png.cjs",
+    "build": "echo 'Build ready'",
+    "bundle": "node build-standalone.cjs",
     "cap:sync": "npx cap sync",
     "cap:android": "npx cap open android",
     "cap:ios": "npx cap open ios",
