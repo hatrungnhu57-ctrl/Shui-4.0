@@ -53,6 +53,76 @@ export function formatMoney(amount) {
   return Number(amount).toLocaleString('vi-VN') + ' đ';
 }
 
+/**
+ * Định dạng số với dấu chấm ngăn cách hàng nghìn (VD: 2000000 -> 2.000.000)
+ */
+export function formatNumberWithDots(val) {
+  if (val === null || val === undefined || val === '') return '';
+  const numStr = val.toString().replace(/\D/g, '');
+  if (!numStr) return '';
+  return Number(numStr).toLocaleString('vi-VN');
+}
+
+/**
+ * Chuyển chuỗi có dấu chấm thành số nguyên (VD: "2.000.000" -> 2000000)
+ */
+export function parseNumberFromDots(str) {
+  if (!str) return 0;
+  const numStr = str.toString().replace(/\D/g, '');
+  return parseInt(numStr, 10) || 0;
+}
+
+/**
+ * Đọc số tiền ra chữ tiếng Việt ngắn gọn (VD: 2.000.000 -> "2 triệu đồng", 500.000 -> "500 ngàn đồng")
+ */
+export function readMoneyToVietnameseWords(amount) {
+  const num = Number(amount) || 0;
+  if (num === 0) return '0 đồng';
+  if (num >= 1000000000) {
+    const ty = (num / 1000000000).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+    return `${ty} tỷ đồng`;
+  }
+  if (num >= 1000000) {
+    const tr = (num / 1000000).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+    return `${tr} triệu đồng`;
+  }
+  if (num >= 1000) {
+    const ng = (num / 1000).toLocaleString('vi-VN', { maximumFractionDigits: 2 });
+    return `${ng} ngàn đồng`;
+  }
+  return `${num.toLocaleString('vi-VN')} đồng`;
+}
+
+/**
+ * Tự động gắn bộ định dạng tiền tệ có dấu chấm và chữ giải thích khi người dùng gõ
+ */
+export function attachMoneyInput(inputEl, helperEl = null, onChange = null) {
+  if (!inputEl) return;
+  inputEl.setAttribute('inputmode', 'numeric');
+
+  const update = () => {
+    const rawVal = parseNumberFromDots(inputEl.value);
+    if (inputEl.value) {
+      inputEl.value = formatNumberWithDots(rawVal);
+    }
+    if (helperEl) {
+      if (rawVal > 0) {
+        helperEl.innerHTML = `💡 Bằng chữ: <strong>${readMoneyToVietnameseWords(rawVal)}</strong>`;
+        helperEl.style.display = 'block';
+      } else {
+        helperEl.style.display = 'none';
+      }
+    }
+    if (typeof onChange === 'function') {
+      onChange(rawVal);
+    }
+  };
+
+  inputEl.addEventListener('input', update);
+  inputEl.addEventListener('blur', update);
+  if (inputEl.value) update();
+}
+
 export function formatDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);

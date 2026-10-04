@@ -49,7 +49,7 @@ export function renderSettingsView(container) {
       <div class="card" style="border-left: 4px solid #0284c7; background: #f0f9ff;">
         <div class="card-header">
           <div class="card-title" style="color: #0369a1;">
-            ☁️ Đồng Bộ Đám Mây Trực Tuyến
+            ☁️ Đồng Bộ Đám Mây & Chuyển Thiết Bị
           </div>
           <span class="badge ${cloudSync.isOnline ? 'badge-success' : 'badge-warning'}" id="cloud-status-badge">
             ${cloudSync.isOnline ? '🟢 Đang Online' : '🟡 Ngoại tuyến'}
@@ -67,6 +67,47 @@ export function renderSettingsView(container) {
           <button class="btn btn-primary btn-sm" id="btn-manual-cloud-sync" style="background: #0284c7; border-color: #0284c7; padding: 4px 10px; font-size: 12px;">
             🔄 Đồng bộ ngay
           </button>
+        </div>
+
+        <!-- Nút Tạo mã đồng bộ sang máy khác -->
+        <button class="btn btn-sm btn-outline btn-block" id="btn-generate-sync-code" style="margin-top: 8px; background: #ffffff; border-color: #38bdf8; color: #0284c7; font-weight: 700; padding: 9px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+          <span>📲</span>
+          <span>Tạo Mã Đồng Bộ / QR Sang Điện Thoại Khác</span>
+        </button>
+      </div>
+
+      <!-- MODAL HIỂN THỊ MÃ ĐỒNG BỘ THIẾT BỊ -->
+      <div id="modal-sync-code-display" class="modal-overlay" style="display: none; z-index: 300;">
+        <div class="modal-content" style="max-width: 360px; text-align: center;">
+          <div class="modal-header">
+            <h3 class="modal-title">📲 Mã Đồng Bộ Thiết Bị</h3>
+            <button class="btn btn-sm btn-outline btn-circle" id="btn-close-sync-code-modal">✕</button>
+          </div>
+          <div class="modal-body">
+            <p style="font-size: 12.5px; color: var(--text-muted);">
+              Mở app Sổ Hụi trên máy mới, ở màn hình Đăng Nhập hãy nhập mã sau để đồng bộ toàn bộ dữ liệu:
+            </p>
+
+            <div style="background: #f0fdf4; border: 2px dashed #22c55e; border-radius: 10px; padding: 14px; margin: 12px 0;">
+              <div style="font-size: 11.5px; color: #166534; font-weight: 600; text-transform: uppercase;">MÃ ĐỒNG BỘ CỦA BẠN</div>
+              <div id="sync-code-val-display" style="font-size: 28px; font-weight: 900; letter-spacing: 6px; color: var(--primary); margin: 6px 0;">
+                SH-8899
+              </div>
+              <button class="btn btn-sm btn-primary" id="btn-copy-sync-code" style="font-size: 11.5px; padding: 4px 10px;">
+                📋 Sao Chép Mã
+              </button>
+            </div>
+
+            <div style="font-size: 12px; color: #64748b; line-height: 1.4; text-align: left; background: #f8fafc; padding: 8px 10px; border-radius: 6px;">
+              ✅ <strong>Cách sử dụng trên máy mới:</strong><br/>
+              1. Truy cập app Sổ Hụi trên điện thoại mới.<br/>
+              2. Nhập mã <strong id="sync-code-instruction">SH-8899</strong> vào ô <em>"Đồng bộ nhanh"</em>.<br/>
+              3. Bấm <strong>"⚡ Đồng Bộ"</strong> ➔ Toàn bộ dây hụi và tài khoản được tải về ngay lập tức!
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-primary btn-block" id="btn-done-sync-code">Đã Hiểu & Đóng</button>
+          </div>
         </div>
       </div>
 
@@ -262,6 +303,48 @@ export function renderSettingsView(container) {
         btn.disabled = false;
         btn.innerText = '🔄 Đồng bộ ngay';
       }
+    }
+  });
+
+  // Sự kiện Tạo Mã Đồng Bộ Thiết Bị
+  const modalSyncCode = document.getElementById('modal-sync-code-display');
+  let currentGeneratedSyncCode = '';
+
+  document.getElementById('btn-generate-sync-code')?.addEventListener('click', async () => {
+    const btn = document.getElementById('btn-generate-sync-code');
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = '⏳ Đang tạo mã...';
+      }
+      const ledger = store.exportJSONData();
+      const code = await cloudSync.createSyncCode(acc, ledger);
+      currentGeneratedSyncCode = code;
+
+      document.getElementById('sync-code-val-display').innerText = code;
+      document.getElementById('sync-code-instruction').innerText = code;
+      modalSyncCode.style.display = 'flex';
+      showToast('Đã tạo mã đồng bộ thiết bị thành công!', 'success');
+    } catch (e) {
+      showToast(e.message, 'danger');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerText = '📲 Tạo Mã Đồng Bộ / QR Sang Điện Thoại Khác';
+      }
+    }
+  });
+
+  document.getElementById('btn-close-sync-code-modal')?.addEventListener('click', () => {
+    modalSyncCode.style.display = 'none';
+  });
+  document.getElementById('btn-done-sync-code')?.addEventListener('click', () => {
+    modalSyncCode.style.display = 'none';
+  });
+  document.getElementById('btn-copy-sync-code')?.addEventListener('click', () => {
+    if (currentGeneratedSyncCode && navigator.clipboard) {
+      navigator.clipboard.writeText(currentGeneratedSyncCode);
+      showToast(`Đã sao chép mã ${currentGeneratedSyncCode}!`, 'success');
     }
   });
 

@@ -4,7 +4,7 @@
  */
 
 import { store } from '../store.js';
-import { formatMoney, formatDate, showToast, escapeHtml } from '../utils.js';
+import { formatMoney, formatDate, showToast, escapeHtml, formatNumberWithDots, parseNumberFromDots, readMoneyToVietnameseWords, attachMoneyInput } from '../utils.js';
 
 export function renderDrawScreen(container, groupId, cycleId) {
   const group = store.state.groups.find(g => g.id === groupId);
@@ -359,12 +359,17 @@ export function renderDrawScreen(container, groupId, cycleId) {
 
         <div class="form-group">
           <label class="form-label">Số tiền thăm kêu trúng (VNĐ/phần) (*):</label>
-          <input type="number" id="input-bidding-amount" class="form-control" placeholder="VD: 300000" step="10000" value="200000" required />
-          <div style="display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap;">
-            <button class="btn btn-sm btn-outline btn-quick-bid" data-val="100000" style="padding: 2px 6px; font-size: 11px;">100k</button>
-            <button class="btn btn-sm btn-outline btn-quick-bid" data-val="200000" style="padding: 2px 6px; font-size: 11px;">200k</button>
-            <button class="btn btn-sm btn-outline btn-quick-bid" data-val="300000" style="padding: 2px 6px; font-size: 11px;">300k</button>
-            <button class="btn btn-sm btn-outline btn-quick-bid" data-val="500000" style="padding: 2px 6px; font-size: 11px;">500k</button>
+          <input type="text" id="input-bidding-amount" class="form-control" placeholder="VD: 300.000" value="200.000" style="font-size: 16px; font-weight: 800; color: var(--accent);" required />
+          <div id="bidding-amount-words" style="font-size: 11.5px; color: #166534; margin-top: 3px; font-weight: 600;">
+            💡 Bằng chữ: <strong>200 ngàn đồng</strong>
+          </div>
+          <div style="display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-sm btn-outline btn-quick-bid" data-val="100000" style="padding: 2px 8px; font-size: 11px;">100k</button>
+            <button type="button" class="btn btn-sm btn-outline btn-quick-bid" data-val="200000" style="padding: 2px 8px; font-size: 11px;">200k</button>
+            <button type="button" class="btn btn-sm btn-outline btn-quick-bid" data-val="300000" style="padding: 2px 8px; font-size: 11px;">300k</button>
+            <button type="button" class="btn btn-sm btn-outline btn-quick-bid" data-val="400000" style="padding: 2px 8px; font-size: 11px;">400k</button>
+            <button type="button" class="btn btn-sm btn-outline btn-quick-bid" data-val="500000" style="padding: 2px 8px; font-size: 11px;">500k</button>
+            <button type="button" class="btn btn-sm btn-outline btn-quick-bid" data-val="1000000" style="padding: 2px 8px; font-size: 11px;">1 tr</button>
           </div>
         </div>
 
@@ -379,11 +384,12 @@ export function renderDrawScreen(container, groupId, cycleId) {
 
     const winnerSelect = document.getElementById('select-bidding-winner');
     const bidInput = document.getElementById('input-bidding-amount');
+    const wordsEl = document.getElementById('bidding-amount-words');
     const liveContainer = document.getElementById('bidding-live-settlement-container');
 
     function updateLiveSettlement() {
       const winnerId = winnerSelect.value;
-      const bid = Number(bidInput.value) || 0;
+      const bid = parseNumberFromDots(bidInput.value) || 0;
       const winnerProf = store.state.profiles.find(p => p.id === winnerId);
 
       const settlement = store.calculateCycleSettlement(group, cycle.cycleNumber, bid, winnerId);
@@ -392,12 +398,16 @@ export function renderDrawScreen(container, groupId, cycleId) {
       }
     }
 
+    attachMoneyInput(bidInput, wordsEl, () => updateLiveSettlement());
     winnerSelect.addEventListener('change', updateLiveSettlement);
-    bidInput.addEventListener('input', updateLiveSettlement);
 
     target.querySelectorAll('.btn-quick-bid').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        bidInput.value = e.target.getAttribute('data-val');
+        const val = Number(e.target.getAttribute('data-val')) || 0;
+        bidInput.value = formatNumberWithDots(val);
+        if (wordsEl) {
+          wordsEl.innerHTML = `💡 Bằng chữ: <strong>${readMoneyToVietnameseWords(val)}</strong>`;
+        }
         updateLiveSettlement();
       });
     });
@@ -406,7 +416,7 @@ export function renderDrawScreen(container, groupId, cycleId) {
 
     document.getElementById('btn-confirm-bidding')?.addEventListener('click', () => {
       const winnerId = winnerSelect.value;
-      const bid = Number(bidInput.value);
+      const bid = parseNumberFromDots(bidInput.value);
 
       if (isNaN(bid) || bid < 0) {
         showToast('Vui lòng nhập mức tiền thăm hợp lệ!', 'warning');
@@ -443,7 +453,7 @@ export function renderDrawScreen(container, groupId, cycleId) {
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px;">
                   <span style="font-size: 12px; color: var(--text-muted);">Mức thăm:</span>
-                  <input type="number" class="form-control input-ballot-val" data-id="${p.id}" placeholder="0" step="10000" style="width: 120px; padding: 6px;" />
+                  <input type="text" class="form-control input-ballot-val" data-id="${p.id}" placeholder="0" style="width: 120px; padding: 6px; text-align: right; font-weight: 700;" />
                 </div>
               </div>
             `;
@@ -456,12 +466,16 @@ export function renderDrawScreen(container, groupId, cycleId) {
       </div>
     `;
 
+    target.querySelectorAll('.input-ballot-val').forEach(inp => {
+      attachMoneyInput(inp);
+    });
+
     document.getElementById('btn-open-ballots')?.addEventListener('click', () => {
       let maxBid = -1;
       let winnerId = null;
 
       container.querySelectorAll('.input-ballot-val').forEach(inp => {
-        const val = Number(inp.value) || 0;
+        const val = parseNumberFromDots(inp.value) || 0;
         if (val > maxBid) {
           maxBid = val;
           winnerId = inp.getAttribute('data-id');

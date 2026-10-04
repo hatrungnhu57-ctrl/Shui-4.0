@@ -4,7 +4,7 @@
  */
 
 import { store } from '../store.js';
-import { formatMoney, showToast } from '../utils.js';
+import { formatMoney, showToast, formatNumberWithDots, parseNumberFromDots, readMoneyToVietnameseWords, attachMoneyInput } from '../utils.js';
 
 export function renderCreateGroup(container) {
   const profiles = store.state.profiles.filter(p => !p.isMerged);
@@ -28,11 +28,23 @@ export function renderCreateGroup(container) {
       <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
         <div class="form-group">
           <label class="form-label">Mức góp / phần (*):</label>
-          <input type="number" id="create-group-amount" class="form-control" placeholder="2000000" step="100000" required />
+          <input type="text" id="create-group-amount" class="form-control" placeholder="2.000.000" value="2.000.000" style="font-size: 16px; font-weight: 800; color: var(--primary);" required />
+          <div id="create-group-amount-words" style="font-size: 11.5px; color: #166534; margin-top: 3px; font-weight: 600;">
+            💡 Bằng chữ: <strong>2 triệu đồng</strong>
+          </div>
+          <!-- Phím chọn nhanh mức tiền -->
+          <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;">
+            <button type="button" class="btn btn-sm btn-outline btn-preset-amount" data-amount="500000" style="font-size: 10.5px; padding: 2px 6px;">500k</button>
+            <button type="button" class="btn btn-sm btn-outline btn-preset-amount" data-amount="1000000" style="font-size: 10.5px; padding: 2px 6px;">1 tr</button>
+            <button type="button" class="btn btn-sm btn-outline btn-preset-amount" data-amount="2000000" style="font-size: 10.5px; padding: 2px 6px;">2 tr</button>
+            <button type="button" class="btn btn-sm btn-outline btn-preset-amount" data-amount="3000000" style="font-size: 10.5px; padding: 2px 6px;">3 tr</button>
+            <button type="button" class="btn btn-sm btn-outline btn-preset-amount" data-amount="5000000" style="font-size: 10.5px; padding: 2px 6px;">5 tr</button>
+            <button type="button" class="btn btn-sm btn-outline btn-preset-amount" data-amount="10000000" style="font-size: 10.5px; padding: 2px 6px;">10 tr</button>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Tổng số phần hụi (*):</label>
-          <input type="number" id="create-group-parts" class="form-control" value="12" min="2" max="60" required />
+          <input type="number" id="create-group-parts" class="form-control" value="12" min="2" max="60" style="font-size: 16px; font-weight: 800;" required />
         </div>
       </div>
 
@@ -79,7 +91,8 @@ export function renderCreateGroup(container) {
 
       <div class="form-group" id="group-custom-comm-box" style="display: none;">
         <label class="form-label" id="lbl-custom-comm">Nhập số tiền hoặc số %:</label>
-        <input type="number" id="create-group-custom-comm" class="form-control" placeholder="VD: 500000" />
+        <input type="text" id="create-group-custom-comm" class="form-control" placeholder="VD: 500.000" />
+        <div id="create-group-custom-comm-words" style="font-size: 11.5px; color: #166534; margin-top: 3px; font-weight: 600; display: none;"></div>
       </div>
 
       <!-- Preview dự tính tiền thảo -->
@@ -149,13 +162,15 @@ export function renderCreateGroup(container) {
   const totalPartsInput = document.getElementById('create-group-parts');
   const counterBadge = document.getElementById('badge-parts-counter');
   const baseAmountInput = document.getElementById('create-group-amount');
+  const baseWordsEl = document.getElementById('create-group-amount-words');
   const commTypeSelect = document.getElementById('create-group-comm-type');
   const customCommBox = document.getElementById('group-custom-comm-box');
   const customCommInput = document.getElementById('create-group-custom-comm');
+  const customCommWordsEl = document.getElementById('create-group-custom-comm-words');
   const previewCommEl = document.getElementById('preview-comm-amount');
 
   function updateCommissionPreview() {
-    const base = Number(baseAmountInput.value) || 0;
+    const base = parseNumberFromDots(baseAmountInput.value) || 0;
     const type = commTypeSelect.value;
     let commVal = 0;
 
@@ -168,11 +183,11 @@ export function renderCreateGroup(container) {
     } else if (type === 'fixed') {
       customCommBox.style.display = 'block';
       document.getElementById('lbl-custom-comm').innerText = 'Nhập số tiền cố định (VNĐ):';
-      commVal = Number(customCommInput.value) || 0;
+      commVal = parseNumberFromDots(customCommInput.value) || 0;
     } else if (type === 'percent') {
       customCommBox.style.display = 'block';
       document.getElementById('lbl-custom-comm').innerText = 'Nhập tỷ lệ %:';
-      const pct = Number(customCommInput.value) || 0;
+      const pct = Number(customCommInput.value.replace(/\D/g, '')) || 0;
       commVal = Math.round((base * pct) / 100);
     }
 
@@ -181,16 +196,30 @@ export function renderCreateGroup(container) {
     }
   }
 
-  baseAmountInput.addEventListener('input', updateCommissionPreview);
+  // Gắn bộ định dạng tiền tệ có dấu chấm
+  attachMoneyInput(baseAmountInput, baseWordsEl, () => updateCommissionPreview());
+  attachMoneyInput(customCommInput, customCommWordsEl, () => updateCommissionPreview());
+
+  // Xử lý các nút chọn nhanh số tiền
+  container.querySelectorAll('.btn-preset-amount').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const amt = Number(btn.getAttribute('data-amount')) || 0;
+      baseAmountInput.value = formatNumberWithDots(amt);
+      if (baseWordsEl) {
+        baseWordsEl.innerHTML = `💡 Bằng chữ: <strong>${readMoneyToVietnameseWords(amt)}</strong>`;
+      }
+      updateCommissionPreview();
+    });
+  });
+
   commTypeSelect.addEventListener('change', () => {
     if (commTypeSelect.value === 'fixed' && !customCommInput.value) {
-      customCommInput.value = '500000';
+      customCommInput.value = '500.000';
     } else if (commTypeSelect.value === 'percent' && !customCommInput.value) {
       customCommInput.value = '30';
     }
     updateCommissionPreview();
   });
-  customCommInput.addEventListener('input', updateCommissionPreview);
   updateCommissionPreview();
 
   function updateCounter() {
@@ -241,14 +270,16 @@ export function renderCreateGroup(container) {
   // Gửi tạo dây hụi
   document.getElementById('btn-submit-create-group')?.addEventListener('click', () => {
     const name = document.getElementById('create-group-name').value.trim();
-    const baseAmount = Number(document.getElementById('create-group-amount').value);
+    const baseAmount = parseNumberFromDots(document.getElementById('create-group-amount').value);
     const totalParts = Number(document.getElementById('create-group-parts').value);
     const periodType = document.getElementById('create-group-period').value;
     const startDate = document.getElementById('create-group-startdate').value;
     const openDayRule = document.getElementById('create-group-rule').value.trim();
     const drawMethod = document.getElementById('create-group-method').value;
     const commissionType = document.getElementById('create-group-comm-type').value;
-    const customComm = Number(document.getElementById('create-group-custom-comm')?.value) || 0;
+    const customComm = commissionType === 'fixed'
+      ? parseNumberFromDots(document.getElementById('create-group-custom-comm')?.value)
+      : (Number(document.getElementById('create-group-custom-comm')?.value.replace(/\D/g, '')) || 0);
     const agreementNotes = document.getElementById('create-group-notes').value.trim();
 
     let commissionRate = 50;
@@ -317,18 +348,6 @@ export function renderCreateGroup(container) {
         commissionType,
         commissionRate,
         commissionAmountFixed,
-        agreementNotes
-      }, selectedMembers);
-
-      showToast(`Tạo thành công dây hụi "${newGroup.name}"!`, 'success');
-      window.location.hash = `#group-detail/${newGroup.id}`;
-    } catch (err) {
-      showToast(err.message, 'danger');
-    }
-  });
-        openDayRule,
-        drawMethod,
-        commissionRate,
         agreementNotes
       }, selectedMembers);
 

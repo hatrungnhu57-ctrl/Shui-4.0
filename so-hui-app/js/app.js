@@ -76,13 +76,13 @@ class SoHuiApp {
           <span class="icon">📋</span>
           <span>Dây hụi</span>
         </button>
+        <button class="nav-item" data-route="#chats">
+          <span class="icon">💬</span>
+          <span>Chat Nhóm</span>
+        </button>
         <button class="nav-item" data-route="#members">
           <span class="icon">👥</span>
           <span>Danh bạ</span>
-        </button>
-        <button class="nav-item" data-route="#guide">
-          <span class="icon">📚</span>
-          <span>Cẩm nang</span>
         </button>
         <button class="nav-item" data-route="#settings">
           <span class="icon">⚙️</span>
@@ -196,6 +196,15 @@ class SoHuiApp {
       if (huiName && huiName !== 'Chung') {
         document.getElementById('fb-content').value = `Tôi xin phản hồi về dây [${huiName}] kỳ ${cycleNum}: `;
       }
+    };
+
+    window.shareGroupInvite = (groupId, name, amount, parts) => {
+      const inviteLink = store.generateGroupInviteLink(groupId);
+      const shareMsg = `📢 THAM GIA DÂY HỤI [${(name || 'SỔ HỤI').toUpperCase()}]\n- Mức góp: ${formatMoney(amount)}/phần (${parts || 12} phần)\n- Bấm link để vào phòng nhóm trao đổi và bỏ thăm kín:\n${inviteLink}\n(Ứng dụng Quản lý Sổ Hụi)`;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(shareMsg);
+      }
+      showToast('Đã sao chép link mời và tin nhắn Zalo thành công! Hãy dán gửi vào Zalo.', 'success', 4000);
     };
 
     this.updateHeader();
@@ -384,6 +393,12 @@ class SoHuiApp {
       return;
     }
 
+    // 5f. Danh sách phòng trò chuyện tất cả dây hụi (#chats)
+    if (hash === '#chats') {
+      this.renderAllChatsView(mainContent);
+      return;
+    }
+
     // 6. Danh sách dây hụi
     if (hash === '#groups') {
       if (store.state.currentRole === 'member') {
@@ -467,9 +482,117 @@ class SoHuiApp {
       renderMemberDashboard(subContainer);
     });
   }
+
+  renderAllChatsView(container) {
+    const role = store.state.currentRole;
+    let availableGroups = store.state.groups;
+
+    if (role === 'member') {
+      const currentProfile = store.state.profiles.find(p => p.phone === store.state.currentUser.phone) || store.state.profiles[1];
+      const memberGroupIds = store.state.groupMembers
+        .filter(gm => gm.memberProfileId === currentProfile.id)
+        .map(gm => gm.groupId);
+      availableGroups = store.state.groups.filter(g => memberGroupIds.includes(g.id));
+    }
+
+    container.innerHTML = `
+      <div>
+        <h2 style="font-size: 18px; font-weight: 800; color: var(--text-main);">
+          💬 Phòng Chat & Đấu Hụi Trực Tuyến
+        </h2>
+        <div style="font-size: 12.5px; color: var(--text-muted);">
+          Danh sách phòng trò chuyện riêng biệt cho từng dây hụi để trao đổi, bỏ thăm kín và mời hụi viên
+        </div>
+      </div>
+
+      ${availableGroups.length > 0 ? `
+        <div class="item-list" style="margin-top: 10px;">
+          ${availableGroups.map(grp => {
+            const cycles = store.state.cycles.filter(c => c.groupId === grp.id);
+            const openCycle = cycles.find(c => c.status === 'open');
+            const messages = store.getGroupMessages(grp.id);
+            const lastMsg = messages.length > 0 ? messages[messages.length - 1] : null;
+
+            return `
+              <div class="card" style="padding: 12px; margin-bottom: 8px; border-left: 4px solid #2563eb;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <div style="width: 40px; height: 40px; border-radius: 10px; background: #eff6ff; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #2563eb;">
+                      💬
+                    </div>
+                    <div>
+                      <h4 style="font-size: 15px; font-weight: 700; color: var(--text-main); margin-bottom: 2px;">${escapeHtml(grp.name)}</h4>
+                      <div style="font-size: 12px; color: var(--text-muted);">
+                        Góp: <strong>${formatMoney(grp.baseAmount)}</strong>/phần • ${grp.totalParts} phần
+                      </div>
+                    </div>
+                  </div>
+                  <span class="badge ${openCycle ? 'badge-warning' : 'badge-success'}">
+                    ${openCycle ? `Kỳ ${openCycle.cycleNumber} đang mở` : 'Đang hoạt động'}
+                  </span>
+                </div>
+
+                ${lastMsg ? `
+                  <div style="background: #f8fafc; border-radius: 6px; padding: 6px 10px; font-size: 12px; color: var(--text-muted); margin: 8px 0; border: 1px dashed var(--border-color);">
+                    <strong>${escapeHtml(lastMsg.senderName)}:</strong> ${escapeHtml(lastMsg.text)}
+                  </div>
+                ` : `
+                  <div style="background: #f8fafc; border-radius: 6px; padding: 6px 10px; font-size: 12px; color: #64748b; margin: 8px 0;">
+                    💡 Chưa có tin nhắn mới. Bấm vào để bắt đầu thảo luận!
+                  </div>
+                `}
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px;">
+                  <button class="btn btn-sm btn-primary" style="background: #2563eb; border-color: #1d4ed8; font-weight: 700; padding: 8px; font-size: 12px;" onclick="window.location.hash='#group-chat/${grp.id}';">
+                    💬 Vào Phòng Chat & Thăm Kín
+                  </button>
+                  <button class="btn btn-sm btn-outline" style="background: #f0fdf4; border-color: #86efac; color: #166534; font-weight: 700; padding: 8px; font-size: 12px;" onclick="window.shareGroupInvite('${grp.id}', '${escapeHtml(grp.name)}', ${grp.baseAmount}, ${grp.totalParts});">
+                    🔗 Mời Zalo (Share)
+                  </button>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      ` : `
+        <div class="card" style="text-align: center; padding: 30px 16px; margin-top: 10px;">
+          <div style="font-size: 36px; margin-bottom: 8px;">💬</div>
+          <h3 style="font-size: 16px; font-weight: 700; color: var(--text-main);">Chưa có phòng chat nào</h3>
+          <p style="font-size: 13px; color: var(--text-muted); margin: 6px 0 14px 0;">
+            Khi bạn tạo dây hụi mới hoặc tham gia vào dây hụi, phòng trò chuyện riêng sẽ tự động xuất hiện tại đây.
+          </p>
+          <button class="btn btn-primary" onclick="window.location.hash='#create-group';">
+            ➕ Tạo Dây Hụi Mới Ngay
+          </button>
+        </div>
+      `}
+    `;
+  }
 }
 
 // Khởi chạy khi DOM sẵn sàng
-document.addEventListener('DOMContentLoaded', () => {
-  window.app = new SoHuiApp();
-});
+function startApp() {
+  try {
+    if (!window.app) {
+      window.app = new SoHuiApp();
+    }
+  } catch (err) {
+    console.error('Lỗi khởi động Sổ Hụi:', err);
+    const container = document.getElementById('app-container');
+    if (container) {
+      container.innerHTML = `
+        <div style="padding: 24px; text-align: center; color: #dc2626;">
+          <h3>⚠️ Không thể khởi động ứng dụng</h3>
+          <p style="font-size: 13px; color: #64748b; margin: 10px 0;">${err.message || 'Lỗi không xác định'}</p>
+          <button class="btn btn-primary" onclick="window.location.reload();">🔄 Tải lại trang</button>
+        </div>
+      `;
+    }
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}

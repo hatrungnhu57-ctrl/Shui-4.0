@@ -67,6 +67,23 @@ export function renderAuthView(container, initialTab = 'login') {
           </button>
         </div>
 
+        <!-- Đồng bộ siêu tốc bằng Mã Thiết Bị (Sync Code) -->
+        <div class="card" style="padding: 14px; background: #f0fdf4; border-color: #86efac;">
+          <div style="font-size: 13px; font-weight: 700; color: #166534; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+            <span>📲</span>
+            <span>Đồng bộ nhanh từ máy khác (Mã Sync Code):</span>
+          </div>
+          <p style="font-size: 11.5px; color: #15803d; margin-bottom: 8px;">
+            Nếu bạn đã có sổ hụi trên điện thoại cũ, hãy nhập mã <strong>SH-XXXX</strong> để sao chép sang máy này ngay lập tức.
+          </p>
+          <div style="display: flex; gap: 6px;">
+            <input type="text" id="input-sync-code-login" class="form-control" placeholder="VD: SH-8899" style="text-transform: uppercase; font-weight: 700; letter-spacing: 2px; font-size: 13px;" />
+            <button type="button" class="btn btn-primary btn-sm" id="btn-submit-sync-code" style="white-space: nowrap; font-size: 12px;">
+              ⚡ Đồng Bộ
+            </button>
+          </div>
+        </div>
+
         <!-- Danh sách tài khoản đã lưu trên máy này -->
         ${accounts.length > 0 ? `
           <div class="card" style="padding: 14px; background: #f8fafc;">
@@ -164,13 +181,52 @@ export function renderAuthView(container, initialTab = 'login') {
           </div>
 
           <button class="btn btn-primary btn-block" id="btn-submit-register" style="margin-top: 10px; padding: 12px; font-size: 15px;">
-            ✨ Tạo Tài Khoản Đám Mây & Mở Sổ
+            📲 Nhận Mã OTP & Tạo Tài Khoản
           </button>
         </div>
       </div>
 
-      <!-- MODAL QUÊN MẬT KHẨU / ĐẶT LẠI MẬT KHẨU -->
-      <div id="modal-forgot-password" class="modal-overlay" style="display: none;">
+      <!-- MODAL XÁC THỰC MÃ OTP (SMS / ZALO ZNS) -->
+      <div id="modal-otp-verify" class="modal-overlay" style="display: none; z-index: 250;">
+        <div class="modal-content" style="max-width: 360px;">
+          <div class="modal-header">
+            <h3 class="modal-title">📲 Xác Thực Số Điện Thoại</h3>
+            <button class="btn btn-sm btn-outline btn-circle" id="btn-close-otp-modal">✕</button>
+          </div>
+          <div class="modal-body" style="text-align: center;">
+            <div style="font-size: 38px; margin-bottom: 6px;">📩</div>
+            <div style="font-size: 13.5px; color: var(--text-main); line-height: 1.5;">
+              Mã xác thực OTP đã được gửi đến số điện thoại:<br/>
+              <strong id="otp-phone-display" style="font-size: 16px; color: var(--primary);">0918123456</strong>
+            </div>
+
+            <!-- Banner mô phỏng tin nhắn SMS đến để test nhanh không tốn tiền -->
+            <div id="otp-sms-banner" style="margin: 12px 0; background: #eff6ff; border: 1px dashed #3b82f6; border-radius: 8px; padding: 10px; text-align: left; font-size: 12px; color: #1e40af;">
+              <div style="display: flex; align-items: center; gap: 6px; font-weight: 700; color: #1d4ed8; margin-bottom: 2px;">
+                <span>📱 Tin nhắn SMS / Zalo:</span>
+              </div>
+              <div id="otp-sms-text">[SỔ HỤI] Mã xác thực OTP của bạn là: <strong style="font-size: 14px; color: #b91c1c;">686868</strong>. Mã có hiệu lực trong 5 phút.</div>
+            </div>
+
+            <div class="form-group" style="margin-top: 10px;">
+              <label class="form-label" style="font-size: 12px; color: var(--text-muted);">Nhập 6 chữ số mã OTP:</label>
+              <input type="text" id="otp-input-code" maxlength="6" class="form-control" placeholder="686868" style="text-align: center; font-size: 24px; font-weight: 800; letter-spacing: 8px; padding: 10px; color: var(--primary);" />
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted); margin-top: 8px;">
+              <span id="otp-timer-text">Gửi lại mã sau: <strong id="otp-countdown">60</strong>s</span>
+              <button type="button" id="btn-resend-otp" class="btn btn-sm btn-outline" style="font-size: 11px; padding: 3px 8px; display: none;">Gửi lại mã 🔄</button>
+            </div>
+          </div>
+          <div class="modal-footer" style="display: flex; gap: 8px;">
+            <button class="btn btn-outline" id="btn-cancel-otp" style="flex: 1;">Hủy</button>
+            <button class="btn btn-primary" id="btn-confirm-otp" style="flex: 2;">Xác Thực & Vào Sổ 🚀</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL QUÊN MẬT KHẨU / ĐẶT LẠI MẬT KHẨU QUA OTP -->
+      <div id="modal-forgot-password" class="modal-overlay" style="display: none; z-index: 240;">
         <div class="modal-content">
           <div class="modal-header">
             <h3 class="modal-title">Khôi Phục & Đặt Lại Mật Khẩu</h3>
@@ -178,12 +234,26 @@ export function renderAuthView(container, initialTab = 'login') {
           </div>
           <div class="modal-body">
             <p style="font-size: 13px; color: var(--text-muted);">
-              Nhập số điện thoại đã đăng ký để đặt lại mật khẩu mới cho tài khoản của bạn.
+              Nhập số điện thoại đã đăng ký để nhận mã xác thực OTP khôi phục mật khẩu.
             </p>
 
             <div class="form-group">
               <label class="form-label">Số điện thoại đăng ký (*):</label>
-              <input type="tel" id="forgot-phone" class="form-control" placeholder="Ví dụ: 0918123456" />
+              <div style="display: flex; gap: 6px;">
+                <input type="tel" id="forgot-phone" class="form-control" placeholder="Ví dụ: 0918123456" style="flex: 1;" />
+                <button type="button" class="btn btn-outline btn-sm" id="btn-get-forgot-otp" style="white-space: nowrap; font-size: 12px;">
+                  📲 Lấy Mã OTP
+                </button>
+              </div>
+            </div>
+
+            <div id="forgot-otp-sms-banner" style="display: none; margin: 8px 0; background: #eff6ff; border: 1px dashed #3b82f6; border-radius: 8px; padding: 8px 10px; font-size: 12px; color: #1e40af;">
+              📱 Tin nhắn SMS: [SỔ HỤI] Mã khôi phục mật khẩu là: <strong id="forgot-otp-code-val" style="color: #b91c1c; font-size: 13.5px;">686868</strong>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Mã xác thực OTP (*):</label>
+              <input type="text" id="forgot-otp-input" maxlength="6" class="form-control" placeholder="Nhập 6 số OTP (hoặc 686868)..." style="font-weight: 700; letter-spacing: 4px;" />
             </div>
 
             <div class="form-group">
@@ -285,6 +355,36 @@ export function renderAuthView(container, initialTab = 'login') {
     }
   });
 
+  // Đồng bộ bằng mã Sync Code
+  document.getElementById('btn-submit-sync-code')?.addEventListener('click', async () => {
+    const code = document.getElementById('input-sync-code-login').value.trim();
+    if (!code) {
+      showToast('Vui lòng nhập mã đồng bộ (VD: SH-8899)!', 'warning');
+      return;
+    }
+
+    const btnSync = document.getElementById('btn-submit-sync-code');
+    try {
+      btnSync.disabled = true;
+      btnSync.innerText = '⏳ Đang kéo...';
+
+      const data = await cloudSync.restoreFromSyncCode(code);
+      if (data && data.account) {
+        if (data.ledger) {
+          store.importJSONData(data.ledger);
+        }
+        await store.login(data.account.phone, data.account.password || '123');
+        showToast(`Đồng bộ thành công sổ hụi của ${data.account.fullName}!`, 'success');
+        window.location.hash = '#dashboard';
+      }
+    } catch (e) {
+      showToast(e.message, 'danger');
+    } finally {
+      btnSync.disabled = false;
+      btnSync.innerText = '⚡ Đồng Bộ';
+    }
+  });
+
   // Đăng nhập nhanh
   container.querySelectorAll('.btn-quick-login').forEach(item => {
     item.addEventListener('click', async () => {
@@ -300,7 +400,34 @@ export function renderAuthView(container, initialTab = 'login') {
     });
   });
 
-  // Sự kiện Đăng ký
+  // --- LOGIC XÁC THỰC MÃ OTP (SMS / ZALO ZNS) CHO ĐĂNG KÝ ---
+  const modalOtp = document.getElementById('modal-otp-verify');
+  const otpInput = document.getElementById('otp-input-code');
+  const otpCountdownEl = document.getElementById('otp-countdown');
+  const btnResendOtp = document.getElementById('btn-resend-otp');
+  const otpTimerText = document.getElementById('otp-timer-text');
+  let otpTimerInterval = null;
+  let pendingRegistrationData = null;
+
+  function startOtpCountdown() {
+    let secondsLeft = 60;
+    if (otpTimerInterval) clearInterval(otpTimerInterval);
+    otpTimerText.style.display = 'inline';
+    btnResendOtp.style.display = 'none';
+    otpCountdownEl.innerText = secondsLeft;
+
+    otpTimerInterval = setInterval(() => {
+      secondsLeft--;
+      otpCountdownEl.innerText = secondsLeft;
+      if (secondsLeft <= 0) {
+        clearInterval(otpTimerInterval);
+        otpTimerText.style.display = 'none';
+        btnResendOtp.style.display = 'inline-block';
+      }
+    }, 1000);
+  }
+
+  // Sự kiện Đăng ký & Kích hoạt gửi OTP
   const btnSubmitReg = document.getElementById('btn-submit-register');
   btnSubmitReg?.addEventListener('click', async () => {
     const fullName = document.getElementById('reg-fullname').value.trim();
@@ -313,37 +440,128 @@ export function renderAuthView(container, initialTab = 'login') {
     const accountNumber = document.getElementById('reg-bank-acc').value.trim();
     const seedDemoData = document.getElementById('reg-seed-demo').checked;
 
+    if (!fullName) {
+      showToast('Vui lòng nhập họ và tên của bạn!', 'warning');
+      return;
+    }
+    if (!phone || phone.length < 9) {
+      showToast('Vui lòng nhập số điện thoại hợp lệ!', 'warning');
+      return;
+    }
+    if (!password || password.length < 3) {
+      showToast('Mật khẩu phải có ít nhất 3 ký tự!', 'warning');
+      return;
+    }
+
     const selectedBank = VIETNAMESE_BANKS.find(b => b.code === bankCode);
+    pendingRegistrationData = {
+      fullName,
+      phone,
+      password,
+      role,
+      shopName,
+      address,
+      bankCode,
+      bankName: selectedBank ? selectedBank.name : bankCode,
+      accountNumber,
+      accountHolder: fullName,
+      seedDemoData
+    };
 
     try {
       btnSubmitReg.disabled = true;
-      btnSubmitReg.innerText = '⏳ Đang khởi tạo tài khoản...';
+      btnSubmitReg.innerText = '⏳ Đang gửi mã OTP...';
 
-      const newAcc = await store.registerAccount({
-        fullName,
-        phone,
-        password,
-        role,
-        shopName,
-        address,
-        bankCode,
-        bankName: selectedBank ? selectedBank.name : bankCode,
-        accountNumber,
-        accountHolder: fullName,
-        seedDemoData
-      });
+      const otpRes = await cloudSync.sendOtpCloud(phone, 'register');
+      document.getElementById('otp-phone-display').innerText = phone;
 
-      showToast(`Tạo tài khoản thành công! Bắt đầu sổ của ${newAcc.fullName}`, 'success');
-      window.location.hash = '#dashboard';
+      const mockOtp = otpRes.mockOtp || '686868';
+      const smsTextEl = document.getElementById('otp-sms-text');
+      if (smsTextEl) {
+        smsTextEl.innerHTML = `[SỔ HỤI] Mã xác thực OTP của bạn là: <strong style="font-size: 15px; color: #b91c1c;">${mockOtp}</strong>. Mã có hiệu lực trong 5 phút.`;
+      }
+
+      modalOtp.style.display = 'flex';
+      otpInput.value = '';
+      setTimeout(() => otpInput.focus(), 200);
+      startOtpCountdown();
+
+      showToast(`Đã gửi mã xác thực OTP đến ${phone}!`, 'success');
     } catch (e) {
       showToast(e.message, 'danger');
     } finally {
       btnSubmitReg.disabled = false;
-      btnSubmitReg.innerText = '✨ Tạo Tài Khoản Đám Mây & Mở Sổ';
+      btnSubmitReg.innerText = '📲 Nhận Mã OTP & Tạo Tài Khoản';
     }
   });
 
-  // Modal Quên Mật Khẩu
+  // Đóng Modal OTP
+  document.getElementById('btn-close-otp-modal')?.addEventListener('click', () => {
+    modalOtp.style.display = 'none';
+    if (otpTimerInterval) clearInterval(otpTimerInterval);
+  });
+  document.getElementById('btn-cancel-otp')?.addEventListener('click', () => {
+    modalOtp.style.display = 'none';
+    if (otpTimerInterval) clearInterval(otpTimerInterval);
+  });
+
+  // Gửi lại mã OTP
+  btnResendOtp?.addEventListener('click', async () => {
+    if (!pendingRegistrationData) return;
+    try {
+      btnResendOtp.innerText = '⏳...';
+      const otpRes = await cloudSync.sendOtpCloud(pendingRegistrationData.phone, 'register');
+      const mockOtp = otpRes.mockOtp || '686868';
+      const smsTextEl = document.getElementById('otp-sms-text');
+      if (smsTextEl) {
+        smsTextEl.innerHTML = `[SỔ HỤI] Mã xác thực OTP mới của bạn là: <strong style="font-size: 15px; color: #b91c1c;">${mockOtp}</strong>. Mã có hiệu lực trong 5 phút.`;
+      }
+      showToast('Đã gửi lại mã OTP mới!', 'success');
+      startOtpCountdown();
+    } catch (e) {
+      showToast(e.message, 'danger');
+    }
+  });
+
+  // Xác thực OTP và Tạo Tài Khoản
+  const btnConfirmOtp = document.getElementById('btn-confirm-otp');
+  const handleVerifyOtpAndRegister = async () => {
+    const otpVal = otpInput.value.trim();
+    if (!otpVal || otpVal.length < 4) {
+      showToast('Vui lòng nhập mã xác thực OTP 6 số!', 'warning');
+      return;
+    }
+    if (!pendingRegistrationData) {
+      showToast('Không tìm thấy thông tin đăng ký!', 'danger');
+      return;
+    }
+
+    try {
+      btnConfirmOtp.disabled = true;
+      btnConfirmOtp.innerText = '⏳ Đang xác thực...';
+
+      await cloudSync.verifyOtpCloud(pendingRegistrationData.phone, otpVal);
+      const newAcc = await store.registerAccount(pendingRegistrationData);
+
+      modalOtp.style.display = 'none';
+      if (otpTimerInterval) clearInterval(otpTimerInterval);
+
+      showToast(`Xác thực OTP thành công! Bắt đầu sổ của ${newAcc.fullName}`, 'success');
+      window.location.hash = '#dashboard';
+    } catch (e) {
+      showToast(e.message, 'danger');
+    } finally {
+      btnConfirmOtp.disabled = false;
+      btnConfirmOtp.innerText = 'Xác Thực & Vào Sổ 🚀';
+    }
+  };
+
+  btnConfirmOtp?.addEventListener('click', handleVerifyOtpAndRegister);
+  otpInput?.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') handleVerifyOtpAndRegister();
+  });
+
+  // --- MODAL QUÊN MẬT KHẨU / ĐẶT LẠI MẬT KHẨU QUA OTP ---
   const modalForgot = document.getElementById('modal-forgot-password');
   document.getElementById('btn-forgot-password-link')?.addEventListener('click', () => {
     modalForgot.style.display = 'flex';
@@ -355,13 +573,48 @@ export function renderAuthView(container, initialTab = 'login') {
     modalForgot.style.display = 'none';
   });
 
+  // Nút lấy mã OTP Quên mật khẩu
+  document.getElementById('btn-get-forgot-otp')?.addEventListener('click', async () => {
+    const phone = document.getElementById('forgot-phone').value.trim();
+    if (!phone || phone.length < 9) {
+      showToast('Vui lòng nhập số điện thoại đã đăng ký!', 'warning');
+      return;
+    }
+
+    try {
+      const btnGet = document.getElementById('btn-get-forgot-otp');
+      btnGet.innerText = '⏳ Đang gửi...';
+      const otpRes = await cloudSync.sendOtpCloud(phone, 'forgot_password');
+      const mockOtp = otpRes.mockOtp || '686868';
+
+      const banner = document.getElementById('forgot-otp-sms-banner');
+      const codeVal = document.getElementById('forgot-otp-code-val');
+      if (banner && codeVal) {
+        codeVal.innerText = mockOtp;
+        banner.style.display = 'block';
+      }
+
+      showToast(`Đã gửi mã OTP khôi phục đến số ${phone}!`, 'success');
+    } catch (e) {
+      showToast(e.message, 'danger');
+    } finally {
+      document.getElementById('btn-get-forgot-otp').innerText = '📲 Lấy Mã OTP';
+    }
+  });
+
+  // Xác nhận đổi mật khẩu
   document.getElementById('btn-submit-reset-password')?.addEventListener('click', async () => {
     const phone = document.getElementById('forgot-phone').value.trim();
+    const otpVal = document.getElementById('forgot-otp-input').value.trim();
     const newPass = document.getElementById('forgot-new-password').value;
     const confirmPass = document.getElementById('forgot-confirm-password').value;
 
     if (!phone) {
       showToast('Vui lòng nhập số điện thoại đã đăng ký!', 'warning');
+      return;
+    }
+    if (!otpVal) {
+      showToast('Vui lòng nhập mã xác thực OTP!', 'warning');
       return;
     }
     if (!newPass || newPass.length < 3) {
@@ -374,7 +627,9 @@ export function renderAuthView(container, initialTab = 'login') {
     }
 
     try {
+      await cloudSync.verifyOtpCloud(phone, otpVal);
       await store.resetPassword(phone, newPass);
+
       showToast('Đặt lại mật khẩu thành công! Hãy đăng nhập bằng mật khẩu mới.', 'success');
       modalForgot.style.display = 'none';
       document.getElementById('login-identifier').value = phone;

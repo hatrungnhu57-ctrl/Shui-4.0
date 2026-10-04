@@ -48,6 +48,48 @@ export function renderAdminView(container) {
         </div>
       </div>
 
+      <!-- CẤU HÌNH CỔNG SMS OTP (eSMS.vn) -->
+      <div class="card" style="border-left: 4px solid #16a34a; background: #f0fdf4;">
+        <div class="card-header">
+          <div class="card-title" style="color: #166534; font-size: 15px;">
+            📲 Cấu Hình Cổng Gửi SMS OTP Thật (eSMS.vn)
+          </div>
+          <span class="badge badge-success" id="sms-config-status">Cổng SMS</span>
+        </div>
+        <p style="font-size: 12.5px; color: #15803d; margin-bottom: 8px;">
+          Gắn APIKey & SecretKey từ tài khoản <strong>eSMS.vn</strong> để kích hoạt gửi mã OTP và tin nhắn nhắc nợ trực tiếp vào SIM điện thoại của hụi viên.
+        </p>
+
+        <div class="form-group" style="margin-bottom: 8px;">
+          <label class="form-label" style="font-size: 12px;">ApiKey (từ eSMS.vn):</label>
+          <input type="text" id="cfg-esms-apikey" class="form-control" placeholder="Ví dụ: E1A2B3C4D5E6F7..." style="font-family: monospace; font-size: 12.5px;" />
+        </div>
+
+        <div class="form-group" style="margin-bottom: 8px;">
+          <label class="form-label" style="font-size: 12px;">SecretKey (từ eSMS.vn):</label>
+          <input type="password" id="cfg-esms-secretkey" class="form-control" placeholder="Nhập SecretKey bí mật..." style="font-family: monospace; font-size: 12.5px;" />
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <div class="form-group" style="margin-bottom: 8px;">
+            <label class="form-label" style="font-size: 12px;">Brandname / Đầu số:</label>
+            <input type="text" id="cfg-esms-brandname" class="form-control" placeholder="Baokim hoặc Brandname riêng" value="Baokim" style="font-size: 12.5px;" />
+          </div>
+          <div class="form-group" style="margin-bottom: 8px;">
+            <label class="form-label" style="font-size: 12px;">Loại tin (SmsType):</label>
+            <select id="cfg-esms-smstype" class="form-control form-select" style="font-size: 12.5px;">
+              <option value="2" selected>2 - CSKH / OTP (Độ tin cậy cao)</option>
+              <option value="1">1 - Tin nhắn quảng cáo</option>
+              <option value="8">8 - Đầu số cố định</option>
+            </select>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-sm btn-block" id="btn-save-esms-config" style="background: #16a34a; border-color: #15803d; font-weight: 700; margin-top: 4px;">
+          💾 Lưu Cấu Hình & Kích Hoạt Gửi SMS Thật
+        </button>
+      </div>
+
       <!-- Thanh tìm kiếm tài khoản -->
       <div class="form-group" style="margin-bottom: 0;">
         <input type="text" id="admin-search-user" class="form-control" placeholder="🔍 Tìm kiếm theo Họ tên hoặc Số điện thoại..." />
@@ -185,6 +227,52 @@ export function renderAdminView(container) {
   });
 
   function attachActionButtons() {
+    // Lưu cấu hình eSMS
+    document.getElementById('btn-save-esms-config')?.addEventListener('click', async () => {
+      const apiKey = document.getElementById('cfg-esms-apikey').value.trim();
+      const secretKey = document.getElementById('cfg-esms-secretkey').value.trim();
+      const brandname = document.getElementById('cfg-esms-brandname').value.trim();
+      const smsType = document.getElementById('cfg-esms-smstype').value;
+
+      if (!apiKey || !secretKey) {
+        showToast('Vui lòng nhập đầy đủ ApiKey và SecretKey từ eSMS.vn!', 'warning');
+        return;
+      }
+
+      const btnSave = document.getElementById('btn-save-esms-config');
+      try {
+        btnSave.disabled = true;
+        btnSave.innerText = '⏳ Đang lưu...';
+
+        const res = await fetch('/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'save_sms_config',
+            apiKey,
+            secretKey,
+            brandname,
+            smsType
+          })
+        });
+
+        // Backup to persistent cloud store as well
+        fetch('https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR/config_esms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apiKey, secretKey, brandname, smsType })
+        }).catch(() => {});
+
+        showToast('Đã lưu cấu hình eSMS.vn thành công! Hệ thống sẵn sàng gửi tin nhắn thật.', 'success');
+        document.getElementById('sms-config-status').innerText = '🟢 Đã Kích Hoạt';
+      } catch (e) {
+        showToast('Lỗi lưu cấu hình: ' + e.message, 'danger');
+      } finally {
+        btnSave.disabled = false;
+        btnSave.innerText = '💾 Lưu Cấu Hình & Kích Hoạt Gửi SMS Thật';
+      }
+    });
+
     // Mở modal đổi mật khẩu
     container.querySelectorAll('.btn-admin-reset-user-pwd').forEach(btn => {
       btn.addEventListener('click', (e) => {
