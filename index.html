@@ -6525,18 +6525,6 @@ function renderCreateGroup(container) {
       showToast(err.message, 'danger');
     }
   });
-        openDayRule,
-        drawMethod,
-        commissionRate,
-        agreementNotes
-      }, selectedMembers);
-
-      showToast(`Tạo thành công dây hụi "${newGroup.name}"!`, 'success');
-      window.location.hash = `#group-detail/${newGroup.id}`;
-    } catch (err) {
-      showToast(err.message, 'danger');
-    }
-  });
 
   updateCounter();
 }
@@ -10478,9 +10466,31 @@ class SoHuiApp {
 }
 
 // Khởi chạy khi DOM sẵn sàng
-document.addEventListener('DOMContentLoaded', () => {
-  window.app = new SoHuiApp();
-});
+function startApp() {
+  try {
+    if (!window.app) {
+      window.app = new SoHuiApp();
+    }
+  } catch (err) {
+    console.error('Lỗi khởi động Sổ Hụi:', err);
+    const container = document.getElementById('app-container');
+    if (container) {
+      container.innerHTML = `
+        <div style="padding: 24px; text-align: center; color: #dc2626;">
+          <h3>⚠️ Không thể khởi động ứng dụng</h3>
+          <p style="font-size: 13px; color: #64748b; margin: 10px 0;">${err.message || 'Lỗi không xác định'}</p>
+          <button class="btn btn-primary" onclick="window.location.reload();">🔄 Tải lại trang</button>
+        </div>
+      `;
+    }
+  }
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}
 
   </script>
 </body>
