@@ -57,10 +57,14 @@ export function renderOwnerDashboard(container) {
       <div class="card-title" style="font-size: 14px; margin-bottom: 4px;">
         ⚡ Thao tác nhanh chủ hụi
       </div>
-      <div class="quick-actions">
+      <div class="quick-actions" style="grid-template-columns: repeat(5, 1fr);">
         <div class="quick-action-btn" id="qa-create-group">
           <div class="quick-action-icon" style="background:#dcfce7; color:#15803d;">➕</div>
-          <span class="quick-action-label">Tạo Dây Hụi</span>
+          <span class="quick-action-label">Tạo Dây</span>
+        </div>
+        <div class="quick-action-btn" id="qa-group-chats">
+          <div class="quick-action-icon" style="background:#eff6ff; color:#2563eb;">💬</div>
+          <span class="quick-action-label">Chat Nhóm</span>
         </div>
         <div class="quick-action-btn" id="qa-record-pay">
           <div class="quick-action-icon" style="background:#fef3c7; color:#b45309;">💰</div>
@@ -74,6 +78,22 @@ export function renderOwnerDashboard(container) {
           <div class="quick-action-icon" style="background:#f3e8ff; color:#7e22ce;">👥</div>
           <span class="quick-action-label">Danh Bạ</span>
         </div>
+      </div>
+
+      <!-- 3 Nút chuyên biệt: Sang sổ, Mua bán hụi & Máy tính tiền hụi -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border-color);">
+        <button class="btn btn-outline btn-sm" id="btn-goto-migrate-ledger" style="background: #fffbeb; border-color: #fde68a; color: #b45309; font-weight: 700; padding: 8px 4px; font-size: 11.5px; display: flex; align-items: center; justify-content: center; gap: 3px;">
+          <span>📖</span>
+          <span>Sang Sổ</span>
+        </button>
+        <button class="btn btn-outline btn-sm" id="btn-goto-transfer-hui" style="background: #f0f9ff; border-color: #bae6fd; color: #0369a1; font-weight: 700; padding: 8px 4px; font-size: 11.5px; display: flex; align-items: center; justify-content: center; gap: 3px;">
+          <span>🤝</span>
+          <span>Sang Hụi</span>
+        </button>
+        <button class="btn btn-outline btn-sm" id="btn-goto-calculator" style="background: #f0fdf4; border-color: #bbf7d0; color: #166534; font-weight: 700; padding: 8px 4px; font-size: 11.5px; display: flex; align-items: center; justify-content: center; gap: 3px;">
+          <span>🧮</span>
+          <span>Máy Tính</span>
+        </button>
       </div>
     </div>
 
@@ -149,6 +169,22 @@ export function renderOwnerDashboard(container) {
                 <span style="color: var(--text-muted);">Kỳ kế: <strong>${currentCycle ? formatDate(currentCycle.openDate) : 'Đã hoàn tất'}</strong></span>
                 <span style="color: var(--primary); font-weight: 600;">Xem chi tiết ➔</span>
               </div>
+
+              <!-- Thanh nút hành động nhanh trên từng dây hụi -->
+              <div style="display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 6px; margin-top: 8px; padding-top: 6px; border-top: 1px solid #f1f5f9;">
+                <button class="btn btn-sm btn-primary" style="background: #2563eb; border-color: #1d4ed8; font-size: 11.5px; padding: 7px 4px; display: flex; align-items: center; justify-content: center; gap: 4px; font-weight: 700;" onclick="event.stopPropagation(); window.location.hash='#group-chat/${group.id}';">
+                  <span>💬</span>
+                  <span>Phòng Chat</span>
+                </button>
+                <button class="btn btn-sm btn-outline" style="background: #f0fdf4; border-color: #86efac; color: #166534; font-weight: 700; font-size: 11.5px; padding: 7px 4px; display: flex; align-items: center; justify-content: center; gap: 4px;" onclick="event.stopPropagation(); window.shareGroupInvite('${group.id}', '${escapeHtml(group.name)}', ${group.baseAmount}, ${group.totalParts});">
+                  <span>🔗</span>
+                  <span>Mời Zalo</span>
+                </button>
+                <button class="btn btn-sm btn-outline" style="font-size: 11.5px; padding: 7px 4px; display: flex; align-items: center; justify-content: center; gap: 4px;" onclick="event.stopPropagation(); window.location.hash='#group-detail/${group.id}';">
+                  <span>📋</span>
+                  <span>Chi Tiết</span>
+                </button>
+              </div>
             </div>
           `;
         }).join('')}
@@ -208,6 +244,10 @@ export function renderOwnerDashboard(container) {
     window.location.hash = '#create-group';
   });
 
+  document.getElementById('qa-group-chats')?.addEventListener('click', () => {
+    window.location.hash = '#chats';
+  });
+
   document.getElementById('qa-record-pay')?.addEventListener('click', () => {
     window.location.hash = '#payments';
   });
@@ -222,6 +262,18 @@ export function renderOwnerDashboard(container) {
 
   document.getElementById('qa-members')?.addEventListener('click', () => {
     window.location.hash = '#members';
+  });
+
+  document.getElementById('btn-goto-migrate-ledger')?.addEventListener('click', () => {
+    window.location.hash = '#migrate-ledger';
+  });
+
+  document.getElementById('btn-goto-transfer-hui')?.addEventListener('click', () => {
+    window.location.hash = '#transfer-hui';
+  });
+
+  document.getElementById('btn-goto-calculator')?.addEventListener('click', () => {
+    window.location.hash = '#calculator';
   });
 
   document.getElementById('btn-view-all-groups')?.addEventListener('click', () => {

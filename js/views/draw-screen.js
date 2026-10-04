@@ -1,10 +1,10 @@
 /**
  * MÀN HÌNH KHUI HỤI (HỖ TRỢ 3 HÌNH THỨC: KÊU HỤI, BỎ THĂM KÍN, QUAY RANDOM)
- * Có lồng cầu quay số, loại trừ người nợ, lưu vết lý do nếu quay lại, chia sẻ kết quả
+ * Tự động tính toán chi tiết: Hụi chết, Hụi sống, Tiền đầu thảo chủ hụi & Tiền thực giao
  */
 
 import { store } from '../store.js';
-import { formatMoney, formatDate, showToast } from '../utils.js';
+import { formatMoney, formatDate, showToast, escapeHtml, formatNumberWithDots, parseNumberFromDots, readMoneyToVietnameseWords, attachMoneyInput } from '../utils.js';
 
 export function renderDrawScreen(container, groupId, cycleId) {
   const group = store.state.groups.find(g => g.id === groupId);
@@ -24,7 +24,6 @@ export function renderDrawScreen(container, groupId, cycleId) {
 
   // Lọc danh sách ứng viên đủ điều kiện (CHƯA HỐT Ở BẤT KỲ KỲ NÀO)
   const allEligibleMembers = groupMembers.filter(gm => {
-    // Nếu chưa từng hốt kỳ nào
     return !gm.hotedCycles || gm.hotedCycles.length === 0;
   });
 
@@ -52,7 +51,7 @@ export function renderDrawScreen(container, groupId, cycleId) {
           🎲 Khui Hụi Kỳ ${cycle.cycleNumber}
         </h2>
         <div style="font-size: 12.5px; color: var(--text-muted);">
-          Dây: <strong>${group.name}</strong> • Mức góp: ${formatMoney(group.baseAmount)}
+          Dây: <strong>${escapeHtml(group.name)}</strong> • Mức góp: ${formatMoney(group.baseAmount)}/phần (${group.totalParts} phần)
         </div>
       </div>
     </div>
@@ -77,7 +76,7 @@ export function renderDrawScreen(container, groupId, cycleId) {
     <div id="draw-mode-content"></div>
   `;
 
-  let currentMode = group.drawMethod || 'random';
+  let currentMode = group.drawMethod || 'bidding';
 
   function renderModeUI(mode) {
     const content = document.getElementById('draw-mode-content');
@@ -92,7 +91,64 @@ export function renderDrawScreen(container, groupId, cycleId) {
     }
   }
 
-  // --- 1. CHẾ ĐỘ QUAY RANDOM (MINH BẠCH, CÓ HIỆU ỨNG LỒNG CẦU) ---
+  // --- HÀM TẠO HTML BẢNG TÍNH TOÁN DÒNG TIỀN TRỰC QUAN ---
+  function createSettlementCardHtml(settlement, winnerProf) {
+    return `
+      <div class="card highlight" style="border: 2px solid var(--primary); background: #ffffff; padding: 12px; margin-top: 10px;">
+        <div style="text-align: center; border-bottom: 2px dashed #bbf7d0; padding-bottom: 8px; margin-bottom: 10px;">
+          <div style="font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
+            📊 BẢNG TÍNH TOÁN DÒNG TIỀN KỲ ${settlement.cycleNumber}
+          </div>
+          <div style="font-size: 18px; font-weight: 800; color: var(--primary); margin: 3px 0;">
+            Người hốt: ${escapeHtml(winnerProf ? winnerProf.fullName : 'Chưa chọn')}
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12.5px;">
+          <!-- Hụi chết -->
+          <div style="display: flex; justify-content: space-between; align-items: center; background: #fef2f2; padding: 6px 10px; border-radius: 6px; border-left: 3px solid var(--accent);">
+            <div>
+              <strong style="color: #991b1b;">🔴 Tiền Hụi Chết (${settlement.deadSharesCount} phần):</strong>
+              <div style="font-size: 11px; color: var(--text-muted);">${settlement.deadSharesCount} người × ${formatMoney(settlement.deadAmountPerShare)} (đóng đủ)</div>
+            </div>
+            <strong style="color: #991b1b; font-size: 13.5px;">${formatMoney(settlement.totalDeadAmount)}</strong>
+          </div>
+
+          <!-- Hụi sống -->
+          <div style="display: flex; justify-content: space-between; align-items: center; background: #f0fdf4; padding: 6px 10px; border-radius: 6px; border-left: 3px solid var(--primary);">
+            <div>
+              <strong style="color: #166534;">🟢 Tiền Hụi Sống (${settlement.liveSharesCount} phần):</strong>
+              <div style="font-size: 11px; color: var(--text-muted);">${settlement.liveSharesCount} người × ${formatMoney(settlement.liveAmountPerShare)} (trừ thăm ${formatMoney(settlement.winningBidAmount)})</div>
+            </div>
+            <strong style="color: #166534; font-size: 13.5px;">${formatMoney(settlement.totalLiveAmount)}</strong>
+          </div>
+
+          <!-- Tổng gom -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #f8fafc; border-radius: 6px;">
+            <span>💰 Tổng tiền gom từ các hụi viên:</span>
+            <strong>${formatMoney(settlement.grossPot)}</strong>
+          </div>
+
+          <!-- Tiền đầu thảo -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #fffbeb; border-radius: 6px; color: #b45309;">
+            <span>🏷️ Trừ Tiền Đầu Thảo Chủ Hụi (${escapeHtml(settlement.commissionRuleLabel)}):</span>
+            <strong style="color: var(--accent);">- ${formatMoney(settlement.commissionAmount)}</strong>
+          </div>
+
+          <!-- Tiền thực nhận -->
+          <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: #ecfdf5; border-radius: 8px; border: 1px solid #86efac;">
+            <div>
+              <strong style="color: var(--primary-dark); font-size: 13px;">💵 THỰC GIAO NGƯỜI HỐT:</strong>
+              <div style="font-size: 11px; font-style: italic; color: #166534;">(${escapeHtml(settlement.netPayoutInWords)})</div>
+            </div>
+            <strong style="color: var(--primary); font-size: 16px;">${formatMoney(settlement.netPayout)}</strong>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // --- 1. CHẾ ĐỘ QUAY RANDOM (MINH BẠCH) ---
   function renderRandomMode(target) {
     target.innerHTML = `
       <div class="card">
@@ -105,9 +161,7 @@ export function renderDrawScreen(container, groupId, cycleId) {
           </label>
         </div>
 
-        <div class="item-list" style="max-height: 200px; overflow-y: auto;" id="random-candidates-list">
-          <!-- Render danh sách người quay -->
-        </div>
+        <div class="item-list" style="max-height: 180px; overflow-y: auto;" id="random-candidates-list"></div>
       </div>
 
       <!-- SÂN KHẤU LỒNG CẦU QUAY SỐ -->
@@ -144,8 +198,8 @@ export function renderDrawScreen(container, groupId, cycleId) {
         return `
           <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: ${isDebt ? '#fff1f2' : '#f0fdf4'}; border-radius: 6px; font-size: 12.5px;">
             <div>
-              <strong>#${idx + 1}. ${prof.fullName}</strong> (${prof.nickname})
-              <div style="font-size: 11px; color: var(--text-muted);">📞 ${prof.phone} • ${gm.sharesCount} phần</div>
+              <strong>#${idx + 1}. ${escapeHtml(prof.fullName)}</strong> (${escapeHtml(prof.nickname)})
+              <div style="font-size: 11px; color: var(--text-muted);">📞 ${escapeHtml(prof.phone)} • ${gm.sharesCount} phần</div>
             </div>
             <span class="badge ${isDebt ? 'badge-danger' : 'badge-success'}">
               ${isDebt ? 'Có cảnh báo nợ' : 'Đủ chuẩn'}
@@ -181,7 +235,6 @@ export function renderDrawScreen(container, groupId, cycleId) {
       statusText.innerText = 'Đang quay lồng cầu chọn ngẫu nhiên...';
       winnerContainer.style.display = 'none';
 
-      // Nhấp nháy tên trong lúc quay
       let spinCounter = 0;
       const spinInterval = setInterval(() => {
         const randTemp = pool[Math.floor(Math.random() * pool.length)];
@@ -189,7 +242,6 @@ export function renderDrawScreen(container, groupId, cycleId) {
         spinCounter++;
       }, 80);
 
-      // Dừng lại sau 3.5 giây và chọn người thắng thực tế
       setTimeout(() => {
         clearInterval(spinInterval);
         cage.classList.remove('spinning');
@@ -209,35 +261,27 @@ export function renderDrawScreen(container, groupId, cycleId) {
       const winnerContainer = document.getElementById('random-winner-container');
       const timestamp = new Date().toLocaleString('vi-VN');
 
+      const settlement = store.calculateCycleSettlement(group, cycle.cycleNumber, 0, winner.prof.id);
+
       winnerContainer.innerHTML = `
         <div class="winner-card" id="winner-share-card">
           <div style="font-size: 32px;">🎉 🏆 🎊</div>
           <h3 style="font-size: 18px; font-weight: 800; margin-top: 4px;">KẾT QUẢ QUAY SỐ RANDOM</h3>
-          <div style="font-size: 13px; margin-bottom: 8px;">DÂY HỤI: <strong>${group.name.toUpperCase()}</strong> - KỲ ${cycle.cycleNumber}</div>
+          <div style="font-size: 13px; margin-bottom: 8px;">DÂY HỤI: <strong>${escapeHtml(group.name.toUpperCase())}</strong> - KỲ ${cycle.cycleNumber}</div>
 
           <div style="background: #ffffff; border-radius: 8px; padding: 12px; margin: 10px 0; border: 1px dashed #d97706; text-align: left;">
             <div style="font-size: 15px; font-weight: 800; color: #15803d; text-align: center;">
-              🥇 NGƯỜI HỐT HỤI: ${winner.prof.fullName} (${winner.prof.nickname})
+              🥇 NGƯỜI HỐT HỤI: ${escapeHtml(winner.prof.fullName)} (${escapeHtml(winner.prof.nickname)})
             </div>
             <div style="font-size: 12.5px; color: var(--text-muted); text-align: center; margin-top: 2px;">
-              📞 SĐT: ${winner.prof.phone} • 📍 ${winner.prof.address || 'Miền Tây'}
-            </div>
-            <hr style="margin: 8px 0; border: none; border-top: 1px dashed #e2e8f0;" />
-            <div style="display: flex; justify-content: space-between; font-size: 12px;">
-              <span>Số người tham gia quay:</span>
-              <strong>${pool.length} hụi viên</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 12px;">
-              <span>Thời gian quay số:</span>
-              <strong>${timestamp}</strong>
-            </div>
-            <div style="display: flex; justify-content: space-between; font-size: 12px;">
-              <span>Mã xác thực:</span>
-              <code>SH-RAND-${Date.now().toString().slice(-6)}</code>
+              📞 SĐT: ${escapeHtml(winner.prof.phone)} • 📍 ${escapeHtml(winner.prof.address || 'Miền Tây')}
             </div>
           </div>
 
-          <div style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- Bảng tính toán tự động -->
+          ${createSettlementCardHtml(settlement, winner.prof)}
+
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
             <button class="btn btn-primary btn-block" id="btn-confirm-random-draw">
               ✅ Xác Nhận Kết Quả & Tạo Bảng Thu Tiền
             </button>
@@ -274,14 +318,14 @@ export function renderDrawScreen(container, groupId, cycleId) {
 
       // Chia sẻ kết quả
       document.getElementById('btn-share-result')?.addEventListener('click', () => {
-        const text = `📢 KẾT QUẢ KHUI HỤI RANDOM MINH BẠCH\n- Dây hụi: ${group.name}\n- Kỳ khui: Kỳ số ${cycle.cycleNumber}\n- Người trúng: ${winner.prof.fullName} (${winner.prof.nickname})\n- Thời gian quay: ${timestamp}\n(Ứng dụng Quản lý Sổ Hụi)`;
+        const text = `📢 KẾT QUẢ KHUI HỤI RANDOM MINH BẠCH\n- Dây hụi: ${group.name}\n- Kỳ khui: Kỳ số ${cycle.cycleNumber}\n- Người trúng: ${winner.prof.fullName} (${winner.prof.nickname})\n- Tổng tiền gom: ${formatMoney(settlement.grossPot)}\n- Trừ tiền đầu thảo: -${formatMoney(settlement.commissionAmount)}\n- Thực giao người hốt: ${formatMoney(settlement.netPayout)}\n- Thời gian: ${timestamp}\n(Ứng dụng Quản lý Sổ Hụi)`;
         navigator.clipboard?.writeText(text);
         showToast('Đã sao chép nội dung kết quả! Bạn có thể dán gửi vào Zalo/Messenger.', 'success');
       });
 
-      // Quay lại có ghi chú lý do bắt buộc
+      // Quay lại
       document.getElementById('btn-redraw')?.addEventListener('click', () => {
-        const reason = prompt('Vui lòng nhập lý do quay lại (Bắt buộc để lưu nhật ký kiểm toán):');
+        const reason = prompt('Vui lòng nhập lý do quay lại:');
         if (!reason || reason.trim().length === 0) {
           showToast('Bắt buộc phải nhập lý do khi quay lại!', 'warning');
           return;
@@ -298,38 +342,81 @@ export function renderDrawScreen(container, groupId, cycleId) {
   function renderBiddingMode(target) {
     target.innerHTML = `
       <div class="card">
-        <div class="card-title">2. Nhập Mức Kêu Hụi / Bỏ Lãi Công Khai</div>
+        <div class="card-title">2. Nhập Mức Kêu Hụi / Bỏ Lãi & Tính Tiền Tự Động</div>
         <p style="font-size:12.5px; color:var(--text-muted);">
-          Ai chịu bỏ mức thăm cao nhất thì người đó trúng hụi kỳ này. Hụi sống sẽ được trừ đúng số tiền thăm đó.
+          Ai chịu bỏ mức thăm cao nhất thì người đó trúng hụi kỳ này. Hệ thống tự động tính toán hụi sống, hụi chết và trừ tiền đầu thảo.
         </p>
 
         <div class="form-group">
-          <label class="form-label">Chọn người trúng hụi (Kêu giá cao nhất):</label>
+          <label class="form-label">Chọn người trúng hụi (Kêu giá cao nhất) (*):</label>
           <select id="select-bidding-winner" class="form-control form-select">
             ${allEligibleMembers.map(gm => {
               const p = store.state.profiles.find(prof => prof.id === gm.memberProfileId);
-              return `<option value="${p.id}">${p.fullName} (${p.nickname}) - ${gm.sharesCount} phần</option>`;
+              return `<option value="${p.id}">${escapeHtml(p.fullName)} (${escapeHtml(p.nickname)}) - ${gm.sharesCount} phần</option>`;
             }).join('')}
           </select>
         </div>
 
         <div class="form-group">
           <label class="form-label">Số tiền thăm kêu trúng (VNĐ/phần) (*):</label>
-          <input type="number" id="input-bidding-amount" class="form-control" placeholder="VD: 300000" step="10000" required />
-          <div style="font-size:11.5px; color:var(--text-muted); margin-top:2px;">
-            Ví dụ bỏ thăm 300.000đ: Hụi viên hụi sống chỉ phải nộp: <strong>${formatMoney(group.baseAmount - 300000)}</strong>
+          <input type="text" id="input-bidding-amount" class="form-control" placeholder="VD: 300.000" value="200.000" style="font-size: 16px; font-weight: 800; color: var(--accent);" required />
+          <div id="bidding-amount-words" style="font-size: 11.5px; color: #166534; margin-top: 3px; font-weight: 600;">
+            💡 Bằng chữ: <strong>200 ngàn đồng</strong>
+          </div>
+          <div style="display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-sm btn-outline btn-quick-bid" data-val="100000" style="padding: 2px 8px; font-size: 11px;">100k</button>
+            <button type="button" class="btn btn-sm btn-outline btn-quick-bid" data-val="200000" style="padding: 2px 8px; font-size: 11px;">200k</button>
+            <button type="button" class="btn btn-sm btn-outline btn-quick-bid" data-val="300000" style="padding: 2px 8px; font-size: 11px;">300k</button>
+            <button type="button" class="btn btn-sm btn-outline btn-quick-bid" data-val="400000" style="padding: 2px 8px; font-size: 11px;">400k</button>
+            <button type="button" class="btn btn-sm btn-outline btn-quick-bid" data-val="500000" style="padding: 2px 8px; font-size: 11px;">500k</button>
+            <button type="button" class="btn btn-sm btn-outline btn-quick-bid" data-val="1000000" style="padding: 2px 8px; font-size: 11px;">1 tr</button>
           </div>
         </div>
 
-        <button class="btn btn-primary btn-block" id="btn-confirm-bidding">
-          🏷️ Xác Nhận Khui Hụi Kêu Lãi
+        <!-- Khung hiển thị bảng tính toán tự động thời gian thực -->
+        <div id="bidding-live-settlement-container"></div>
+
+        <button class="btn btn-primary btn-block" id="btn-confirm-bidding" style="margin-top: 12px; padding: 12px; font-size: 15px;">
+          🏷️ Xác Nhận Khui Hụi & Tạo Bảng Thu Tiền
         </button>
       </div>
     `;
 
+    const winnerSelect = document.getElementById('select-bidding-winner');
+    const bidInput = document.getElementById('input-bidding-amount');
+    const wordsEl = document.getElementById('bidding-amount-words');
+    const liveContainer = document.getElementById('bidding-live-settlement-container');
+
+    function updateLiveSettlement() {
+      const winnerId = winnerSelect.value;
+      const bid = parseNumberFromDots(bidInput.value) || 0;
+      const winnerProf = store.state.profiles.find(p => p.id === winnerId);
+
+      const settlement = store.calculateCycleSettlement(group, cycle.cycleNumber, bid, winnerId);
+      if (settlement && liveContainer) {
+        liveContainer.innerHTML = createSettlementCardHtml(settlement, winnerProf);
+      }
+    }
+
+    attachMoneyInput(bidInput, wordsEl, () => updateLiveSettlement());
+    winnerSelect.addEventListener('change', updateLiveSettlement);
+
+    target.querySelectorAll('.btn-quick-bid').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const val = Number(e.target.getAttribute('data-val')) || 0;
+        bidInput.value = formatNumberWithDots(val);
+        if (wordsEl) {
+          wordsEl.innerHTML = `💡 Bằng chữ: <strong>${readMoneyToVietnameseWords(val)}</strong>`;
+        }
+        updateLiveSettlement();
+      });
+    });
+
+    updateLiveSettlement();
+
     document.getElementById('btn-confirm-bidding')?.addEventListener('click', () => {
-      const winnerId = document.getElementById('select-bidding-winner').value;
-      const bid = Number(document.getElementById('input-bidding-amount').value);
+      const winnerId = winnerSelect.value;
+      const bid = parseNumberFromDots(bidInput.value);
 
       if (isNaN(bid) || bid < 0) {
         showToast('Vui lòng nhập mức tiền thăm hợp lệ!', 'warning');
@@ -352,7 +439,7 @@ export function renderDrawScreen(container, groupId, cycleId) {
       <div class="card">
         <div class="card-title">2. Nhập Phiếu Thăm Kín Của Các Hụi Viên</div>
         <p style="font-size:12.5px; color:var(--text-muted);">
-          Nhập số tiền ghi trong phiếu kín của từng người. Ứng dụng sẽ tự động tìm ra người bỏ cao nhất để trao hụi.
+          Nhập số tiền ghi trong phiếu kín của từng người. Ứng dụng sẽ tự động tìm ra người bỏ cao nhất để trao hụi và tính toán dòng tiền.
         </p>
 
         <div class="item-list">
@@ -361,12 +448,12 @@ export function renderDrawScreen(container, groupId, cycleId) {
             return `
               <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #f8fafc; border-radius: 6px;">
                 <div>
-                  <strong style="font-size: 13.5px;">${p.fullName}</strong>
-                  <div style="font-size: 11px; color: var(--text-muted);">${p.nickname}</div>
+                  <strong style="font-size: 13.5px;">${escapeHtml(p.fullName)}</strong>
+                  <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(p.nickname)} (${gm.sharesCount} phần)</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px;">
                   <span style="font-size: 12px; color: var(--text-muted);">Mức thăm:</span>
-                  <input type="number" class="form-control input-ballot-val" data-id="${p.id}" placeholder="0" step="10000" style="width: 110px; padding: 6px;" />
+                  <input type="text" class="form-control input-ballot-val" data-id="${p.id}" placeholder="0" style="width: 120px; padding: 6px; text-align: right; font-weight: 700;" />
                 </div>
               </div>
             `;
@@ -379,12 +466,16 @@ export function renderDrawScreen(container, groupId, cycleId) {
       </div>
     `;
 
+    target.querySelectorAll('.input-ballot-val').forEach(inp => {
+      attachMoneyInput(inp);
+    });
+
     document.getElementById('btn-open-ballots')?.addEventListener('click', () => {
       let maxBid = -1;
       let winnerId = null;
 
       container.querySelectorAll('.input-ballot-val').forEach(inp => {
-        const val = Number(inp.value) || 0;
+        const val = parseNumberFromDots(inp.value) || 0;
         if (val > maxBid) {
           maxBid = val;
           winnerId = inp.getAttribute('data-id');
@@ -397,7 +488,9 @@ export function renderDrawScreen(container, groupId, cycleId) {
       }
 
       const winnerProf = store.state.profiles.find(p => p.id === winnerId);
-      if (confirm(`Kết quả mở thăm kín:\nNgười bỏ cao nhất là ${winnerProf.fullName} với mức thăm: ${formatMoney(maxBid)}.\nBạn có xác nhận người này trúng hụi không?`)) {
+      const settlement = store.calculateCycleSettlement(group, cycle.cycleNumber, maxBid, winnerId);
+
+      if (confirm(`Kết quả mở thăm kín:\n- Người trúng: ${winnerProf.fullName} (Thăm: ${formatMoney(maxBid)})\n- Tổng gom: ${formatMoney(settlement.grossPot)}\n- Trừ tiền đầu thảo: -${formatMoney(settlement.commissionAmount)}\n- Người hốt thực nhận: ${formatMoney(settlement.netPayout)}\n\nBạn có xác nhận kết quả này không?`)) {
         try {
           store.executeCycleDraw(cycle.id, winnerId, maxBid, 'secret_ballot');
           showToast(`Khui hụi thành công cho ${winnerProf.fullName}!`, 'success');

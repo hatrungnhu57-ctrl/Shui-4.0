@@ -4,7 +4,7 @@
  */
 
 import { store } from '../store.js';
-import { formatMoney, showToast } from '../utils.js';
+import { formatMoney, showToast, formatNumberWithDots, parseNumberFromDots, readMoneyToVietnameseWords, attachMoneyInput } from '../utils.js';
 
 export function renderCreateGroup(container) {
   const profiles = store.state.profiles.filter(p => !p.isMerged);
@@ -28,11 +28,23 @@ export function renderCreateGroup(container) {
       <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
         <div class="form-group">
           <label class="form-label">Mức góp / phần (*):</label>
-          <input type="number" id="create-group-amount" class="form-control" placeholder="2000000" step="100000" required />
+          <input type="text" id="create-group-amount" class="form-control" placeholder="2.000.000" value="2.000.000" style="font-size: 16px; font-weight: 800; color: var(--primary);" required />
+          <div id="create-group-amount-words" style="font-size: 11.5px; color: #166534; margin-top: 3px; font-weight: 600;">
+            💡 Bằng chữ: <strong>2 triệu đồng</strong>
+          </div>
+          <!-- Phím chọn nhanh mức tiền -->
+          <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px;">
+            <button type="button" class="btn btn-sm btn-outline btn-preset-amount" data-amount="500000" style="font-size: 10.5px; padding: 2px 6px;">500k</button>
+            <button type="button" class="btn btn-sm btn-outline btn-preset-amount" data-amount="1000000" style="font-size: 10.5px; padding: 2px 6px;">1 tr</button>
+            <button type="button" class="btn btn-sm btn-outline btn-preset-amount" data-amount="2000000" style="font-size: 10.5px; padding: 2px 6px;">2 tr</button>
+            <button type="button" class="btn btn-sm btn-outline btn-preset-amount" data-amount="3000000" style="font-size: 10.5px; padding: 2px 6px;">3 tr</button>
+            <button type="button" class="btn btn-sm btn-outline btn-preset-amount" data-amount="5000000" style="font-size: 10.5px; padding: 2px 6px;">5 tr</button>
+            <button type="button" class="btn btn-sm btn-outline btn-preset-amount" data-amount="10000000" style="font-size: 10.5px; padding: 2px 6px;">10 tr</button>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Tổng số phần hụi (*):</label>
-          <input type="number" id="create-group-parts" class="form-control" value="12" min="2" max="60" required />
+          <input type="number" id="create-group-parts" class="form-control" value="12" min="2" max="60" style="font-size: 16px; font-weight: 800;" required />
         </div>
       </div>
 
@@ -67,9 +79,25 @@ export function renderCreateGroup(container) {
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Tiền thảo chủ hụi (%):</label>
-          <input type="number" id="create-group-commission" class="form-control" value="50" placeholder="50 (% của 1 phần góp)" />
+          <label class="form-label">Tiền thảo chủ hụi (*):</label>
+          <select id="create-group-comm-type" class="form-control form-select">
+            <option value="half_share" selected>Nửa phần (50% của 1 suất góp) - Chuẩn</option>
+            <option value="full_share">Một phần (100% của 1 suất góp)</option>
+            <option value="fixed">Số tiền cố định (VNĐ/kỳ)</option>
+            <option value="percent">Theo % tùy chỉnh</option>
+          </select>
         </div>
+      </div>
+
+      <div class="form-group" id="group-custom-comm-box" style="display: none;">
+        <label class="form-label" id="lbl-custom-comm">Nhập số tiền hoặc số %:</label>
+        <input type="text" id="create-group-custom-comm" class="form-control" placeholder="VD: 500.000" />
+        <div id="create-group-custom-comm-words" style="font-size: 11.5px; color: #166534; margin-top: 3px; font-weight: 600; display: none;"></div>
+      </div>
+
+      <!-- Preview dự tính tiền thảo -->
+      <div id="create-group-calc-preview" style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px; font-size: 12.5px; color: #166534; margin-bottom: 10px;">
+        💡 <strong>Dự tính tiền thảo:</strong> Mỗi kỳ người hốt trích trả cho Chủ hụi: <strong id="preview-comm-amount" style="color: var(--primary); font-size: 14px;">1.000.000 đ</strong>
       </div>
 
       <div class="form-group">
@@ -133,6 +161,66 @@ export function renderCreateGroup(container) {
   // Cập nhật số phần khi click checkbox hoặc thay đổi số phần
   const totalPartsInput = document.getElementById('create-group-parts');
   const counterBadge = document.getElementById('badge-parts-counter');
+  const baseAmountInput = document.getElementById('create-group-amount');
+  const baseWordsEl = document.getElementById('create-group-amount-words');
+  const commTypeSelect = document.getElementById('create-group-comm-type');
+  const customCommBox = document.getElementById('group-custom-comm-box');
+  const customCommInput = document.getElementById('create-group-custom-comm');
+  const customCommWordsEl = document.getElementById('create-group-custom-comm-words');
+  const previewCommEl = document.getElementById('preview-comm-amount');
+
+  function updateCommissionPreview() {
+    const base = parseNumberFromDots(baseAmountInput.value) || 0;
+    const type = commTypeSelect.value;
+    let commVal = 0;
+
+    if (type === 'half_share') {
+      commVal = Math.round(base * 0.5);
+      customCommBox.style.display = 'none';
+    } else if (type === 'full_share') {
+      commVal = base;
+      customCommBox.style.display = 'none';
+    } else if (type === 'fixed') {
+      customCommBox.style.display = 'block';
+      document.getElementById('lbl-custom-comm').innerText = 'Nhập số tiền cố định (VNĐ):';
+      commVal = parseNumberFromDots(customCommInput.value) || 0;
+    } else if (type === 'percent') {
+      customCommBox.style.display = 'block';
+      document.getElementById('lbl-custom-comm').innerText = 'Nhập tỷ lệ %:';
+      const pct = Number(customCommInput.value.replace(/\D/g, '')) || 0;
+      commVal = Math.round((base * pct) / 100);
+    }
+
+    if (previewCommEl) {
+      previewCommEl.innerText = formatMoney(commVal);
+    }
+  }
+
+  // Gắn bộ định dạng tiền tệ có dấu chấm
+  attachMoneyInput(baseAmountInput, baseWordsEl, () => updateCommissionPreview());
+  attachMoneyInput(customCommInput, customCommWordsEl, () => updateCommissionPreview());
+
+  // Xử lý các nút chọn nhanh số tiền
+  container.querySelectorAll('.btn-preset-amount').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const amt = Number(btn.getAttribute('data-amount')) || 0;
+      baseAmountInput.value = formatNumberWithDots(amt);
+      if (baseWordsEl) {
+        baseWordsEl.innerHTML = `💡 Bằng chữ: <strong>${readMoneyToVietnameseWords(amt)}</strong>`;
+      }
+      updateCommissionPreview();
+    });
+  });
+
+  commTypeSelect.addEventListener('change', () => {
+    if (commTypeSelect.value === 'fixed' && !customCommInput.value) {
+      customCommInput.value = '500.000';
+    } else if (commTypeSelect.value === 'percent' && !customCommInput.value) {
+      customCommInput.value = '30';
+    }
+    updateCommissionPreview();
+  });
+  updateCommissionPreview();
 
   function updateCounter() {
     const targetTotal = Number(totalPartsInput.value) || 0;
@@ -182,14 +270,27 @@ export function renderCreateGroup(container) {
   // Gửi tạo dây hụi
   document.getElementById('btn-submit-create-group')?.addEventListener('click', () => {
     const name = document.getElementById('create-group-name').value.trim();
-    const baseAmount = Number(document.getElementById('create-group-amount').value);
+    const baseAmount = parseNumberFromDots(document.getElementById('create-group-amount').value);
     const totalParts = Number(document.getElementById('create-group-parts').value);
     const periodType = document.getElementById('create-group-period').value;
     const startDate = document.getElementById('create-group-startdate').value;
     const openDayRule = document.getElementById('create-group-rule').value.trim();
     const drawMethod = document.getElementById('create-group-method').value;
-    const commissionRate = Number(document.getElementById('create-group-commission').value) || 0;
+    const commissionType = document.getElementById('create-group-comm-type').value;
+    const customComm = commissionType === 'fixed'
+      ? parseNumberFromDots(document.getElementById('create-group-custom-comm')?.value)
+      : (Number(document.getElementById('create-group-custom-comm')?.value.replace(/\D/g, '')) || 0);
     const agreementNotes = document.getElementById('create-group-notes').value.trim();
+
+    let commissionRate = 50;
+    let commissionAmountFixed = 0;
+    if (commissionType === 'half_share') commissionRate = 50;
+    else if (commissionType === 'full_share') commissionRate = 100;
+    else if (commissionType === 'percent') commissionRate = customComm;
+    else if (commissionType === 'fixed') {
+      commissionAmountFixed = customComm;
+      commissionRate = 0;
+    }
 
     if (!name || !baseAmount || !totalParts) {
       showToast('Vui lòng điền đầy đủ Tên dây, Mức góp và Tổng số phần!', 'warning');
@@ -242,6 +343,20 @@ export function renderCreateGroup(container) {
         totalParts,
         periodType,
         startDate,
+        openDayRule,
+        drawMethod,
+        commissionType,
+        commissionRate,
+        commissionAmountFixed,
+        agreementNotes
+      }, selectedMembers);
+
+      showToast(`Tạo thành công dây hụi "${newGroup.name}"!`, 'success');
+      window.location.hash = `#group-detail/${newGroup.id}`;
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  });
         openDayRule,
         drawMethod,
         commissionRate,

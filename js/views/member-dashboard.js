@@ -122,9 +122,13 @@ export function renderMemberDashboard(container) {
                 <div>Chu kỳ: <strong>${getPeriodLabel(grp.periodType)}</strong></div>
               </div>
 
-              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--primary); font-weight: 600; padding-top: 4px;">
-                <span>Xem lịch sử đóng & biên nhận</span>
-                <span>Chi tiết ➔</span>
+              <div style="display: flex; gap: 6px; margin-top: 6px;">
+                <button class="btn btn-sm btn-primary" style="flex: 1; background: #2563eb; border-color: #1d4ed8; font-size: 11.5px; padding: 6px;" onclick="event.stopPropagation(); window.location.hash='#group-chat/${grp.id}';">
+                  💬 Vào Nhóm & Bỏ Thăm Kín
+                </button>
+                <button class="btn btn-sm btn-outline" style="flex: 1; font-size: 11.5px; padding: 6px;" onclick="event.stopPropagation(); window.location.hash='#group-detail/${grp.id}';">
+                  📋 Xem Chi Tiết
+                </button>
               </div>
             </div>
           `;

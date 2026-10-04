@@ -35,6 +35,11 @@ const groupDetail = cleanImports(fs.readFileSync(path.join(baseDir, 'js/views/gr
 const drawScreen = cleanImports(fs.readFileSync(path.join(baseDir, 'js/views/draw-screen.js'), 'utf8'));
 const cyclePayments = cleanImports(fs.readFileSync(path.join(baseDir, 'js/views/cycle-payments.js'), 'utf8'));
 const guideAndLogs = cleanImports(fs.readFileSync(path.join(baseDir, 'js/views/guide-and-logs.js'), 'utf8'));
+const adminView = cleanImports(fs.readFileSync(path.join(baseDir, 'js/views/admin-view.js'), 'utf8'));
+const migrateLedgerView = cleanImports(fs.readFileSync(path.join(baseDir, 'js/views/migrate-ledger-view.js'), 'utf8'));
+const transferHuiView = cleanImports(fs.readFileSync(path.join(baseDir, 'js/views/transfer-hui-view.js'), 'utf8'));
+const calculatorView = cleanImports(fs.readFileSync(path.join(baseDir, 'js/views/calculator-view.js'), 'utf8'));
+const groupChatView = cleanImports(fs.readFileSync(path.join(baseDir, 'js/views/group-chat-view.js'), 'utf8'));
 const appMain = cleanImports(fs.readFileSync(path.join(baseDir, 'js/app.js'), 'utf8'));
 
 const bundleHtml = `<!DOCTYPE html>
@@ -112,6 +117,16 @@ ${drawScreen}
 ${cyclePayments}
 
 ${guideAndLogs}
+
+${adminView}
+
+${migrateLedgerView}
+
+${transferHuiView}
+
+${calculatorView}
+
+${groupChatView}
 
 ${appMain}
   </script>

@@ -24,7 +24,7 @@ export function renderGroupDetail(container, groupId) {
 
   container.innerHTML = `
     <!-- Tiêu đề & Thông tin cơ bản -->
-    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
       <div>
         <button class="btn btn-sm btn-outline" style="margin-bottom: 6px;" onclick="window.location.hash='#groups'">
           ← Danh sách dây
@@ -37,6 +37,28 @@ export function renderGroupDetail(container, groupId) {
       <span class="badge ${group.status === 'active' ? 'badge-success' : 'badge-gray'}">
         ${group.status === 'active' ? 'Đang hoạt động' : 'Đã mãn dây'}
       </span>
+    </div>
+
+    <!-- BANNER NỔI BẬT: PHÒNG CHAT & SHARE LINK MỜI ZALO -->
+    <div class="card" style="background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff; border: none; padding: 14px; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(37,99,235,0.25);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+        <div style="font-weight: 800; font-size: 15px; display: flex; align-items: center; gap: 6px;">
+          <span>💬</span>
+          <span>Phòng Trò Chuyện & Bỏ Thăm Kín</span>
+        </div>
+        <span class="badge" style="background: #22c55e; color: #fff; font-weight: 700; font-size: 11px;">🟢 Trực Tuyến</span>
+      </div>
+      <p style="font-size: 12px; opacity: 0.92; margin-bottom: 10px; line-height: 1.4;">
+        Thảo luận cùng hụi viên, nhận thông báo khui hụi tự động và nộp phiếu thăm kín bí mật trực tiếp trong nhóm.
+      </p>
+      <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px;">
+        <button class="btn btn-sm" id="btn-top-goto-chat" style="background: #ffffff; color: #1e3a8a; font-weight: 800; padding: 10px 8px; font-size: 12.5px; border: none; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.15);">
+          💬 Vào Phòng Chat & Thăm
+        </button>
+        <button class="btn btn-sm" id="btn-top-share-invite" style="background: #22c55e; color: #ffffff; font-weight: 800; border: none; padding: 10px 8px; font-size: 12.5px; cursor: pointer;">
+          🔗 Mời Zalo (Copy Link)
+        </button>
+      </div>
     </div>
 
     <!-- Card Tổng Quan Thông Số -->
@@ -64,9 +86,23 @@ export function renderGroupDetail(container, groupId) {
         </div>
       ` : ''}
 
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+        <button class="btn btn-sm btn-primary" id="btn-goto-group-chat" style="background: #2563eb; border-color: #1d4ed8; font-weight: 700; padding: 9px; display: flex; align-items: center; justify-content: center; gap: 4px;">
+          <span>💬</span>
+          <span>Phòng Nhóm & Bỏ Thăm Kín</span>
+        </button>
+        <button class="btn btn-sm btn-outline" id="btn-transfer-hui-this-group" style="background: #f0f9ff; border-color: #bae6fd; color: #0369a1; font-weight: 700; padding: 9px; display: flex; align-items: center; justify-content: center; gap: 4px;">
+          <span>🤝</span>
+          <span>Sang Nhượng Hụi</span>
+        </button>
+      </div>
+
       <div style="display: flex; gap: 8px; margin-top: 6px;">
         <button class="btn btn-sm btn-outline" id="btn-export-group-excel" style="flex: 1;">
-          📊 Xuất Bảng Kê Excel
+          📊 Xuất Excel
+        </button>
+        <button class="btn btn-sm btn-outline" id="btn-share-group-invite" style="flex: 1; color: #166534; border-color: #86efac; background: #f0fdf4; font-weight: 700;">
+          🔗 Mời Hụi Viên
         </button>
       </div>
     </div>
@@ -206,6 +242,26 @@ export function renderGroupDetail(container, groupId) {
 
     exportToCSV(`SoHui_${group.name.replace(/\s+/g, '_')}.csv`, rows);
     showToast('Đã xuất file bảng kê hụi thành công!', 'success');
+  });
+
+  document.getElementById('btn-transfer-hui-this-group')?.addEventListener('click', () => {
+    window.location.hash = `#transfer-hui/${group.id}`;
+  });
+
+  document.getElementById('btn-goto-group-chat')?.addEventListener('click', () => {
+    window.location.hash = `#group-chat/${group.id}`;
+  });
+
+  document.getElementById('btn-top-goto-chat')?.addEventListener('click', () => {
+    window.location.hash = `#group-chat/${group.id}`;
+  });
+
+  document.getElementById('btn-share-group-invite')?.addEventListener('click', () => {
+    window.shareGroupInvite(group.id, group.name, group.baseAmount, group.totalParts);
+  });
+
+  document.getElementById('btn-top-share-invite')?.addEventListener('click', () => {
+    window.shareGroupInvite(group.id, group.name, group.baseAmount, group.totalParts);
   });
 }
 

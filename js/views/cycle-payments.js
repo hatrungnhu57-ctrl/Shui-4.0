@@ -1,11 +1,10 @@
 /**
- * QUẢN LÝ ĐÓNG TIỀN, BIÊN NHẬN, VIETQR & CHỐT SỔ KỲ HỤI (PAYMENTS & RECEIPTS)
- * Ghi nhận tiền mặt / chuyển khoản, tự động sinh mã VietQR chuẩn ngân hàng,
- * xem/in biên nhận điện tử, xuất PDF/Excel, chốt sổ.
+ * QUẢN LÝ ĐÓNG TIỀN, BIÊN NHẬN, VIETQR, PHIẾU GIAO HỤI & CHỐT SỔ KỲ HỤI (PAYMENTS & SETTLEMENT)
+ * Tự động tính toán chi tiết hụi sống, hụi chết, trừ tiền đầu thảo, xuất phiếu giao hụi chuẩn pháp lý
  */
 
 import { store } from '../store.js';
-import { formatMoney, formatDate, showToast, exportToCSV, generateVietQRUrl } from '../utils.js';
+import { formatMoney, formatDate, formatDateTime, showToast, exportToCSV, generateVietQRUrl, escapeHtml } from '../utils.js';
 
 export function renderCyclePayments(container, cycleId) {
   const cycle = store.state.cycles.find(c => c.id === cycleId);
@@ -24,10 +23,18 @@ export function renderCyclePayments(container, cycleId) {
   const winnerProfile = store.state.profiles.find(p => p.id === cycle.winnerMemberProfileId);
   const acc = store.currentAccount;
 
+  // Tính toán lại hoặc lấy thông số quyết toán
+  const settlement = store.calculateCycleSettlement(group, cycle.cycleNumber, cycle.winningBidAmount, cycle.winnerMemberProfileId, cycle.commissionAmount);
+
   // Thống kê tổng tiền thu
   const totalPaid = payments.reduce((sum, p) => sum + (p.amountPaid || 0), 0);
   const totalDue = payments.reduce((sum, p) => sum + (p.amountDue || 0), 0);
   const remaining = totalDue - totalPaid;
+
+  // Phân loại danh sách đóng tiền
+  const deadPayments = payments.filter(p => p.isDeadHui && p.memberProfileId !== cycle.winnerMemberProfileId);
+  const livePayments = payments.filter(p => !p.isDeadHui && p.memberProfileId !== cycle.winnerMemberProfileId);
+  const winnerPayment = payments.find(p => p.memberProfileId === cycle.winnerMemberProfileId);
 
   container.innerHTML = `
     <!-- Header -->
@@ -37,10 +44,10 @@ export function renderCyclePayments(container, cycleId) {
           ← Dây hụi
         </button>
         <h2 style="font-size: 18px; font-weight: 800; color: var(--text-main);">
-          💳 Bảng Thu Tiền Kỳ ${cycle.cycleNumber}
+          💳 Quyết Toán & Thu Tiền Kỳ ${cycle.cycleNumber}
         </h2>
         <div style="font-size: 12.5px; color: var(--text-muted);">
-          Dây: <strong>${group.name}</strong> • Ngày khui: ${formatDate(cycle.openDate)}
+          Dây: <strong>${escapeHtml(group.name)}</strong> • Mức góp: ${formatMoney(group.baseAmount)} • Ngày khui: ${formatDate(cycle.openDate)}
         </div>
       </div>
       <span class="badge ${cycle.status === 'closed' ? 'badge-gray' : 'badge-warning'}">
@@ -48,22 +55,42 @@ export function renderCyclePayments(container, cycleId) {
       </span>
     </div>
 
-    <!-- Thông tin người trúng hốt & số tiền thực nhận -->
+    <!-- BẢNG QUYẾT TOÁN GIAO HỤI & KHẤU TRỪ TIỀN ĐẦU THẢO -->
     ${winnerProfile ? `
-      <div class="card highlight" style="padding: 12px;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div class="card highlight" style="border: 2px solid var(--primary); background: #ffffff; padding: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px;">
           <div>
             <div style="font-size: 12px; color: var(--text-muted);">Người hốt kỳ này:</div>
-            <strong style="font-size: 15px; color: var(--primary-dark);">🏆 ${winnerProfile.fullName} (${winnerProfile.nickname})</strong>
+            <strong style="font-size: 16px; color: var(--primary-dark);">🏆 ${escapeHtml(winnerProfile.fullName)} ${winnerProfile.nickname ? `(${escapeHtml(winnerProfile.nickname)})` : ''}</strong>
+            <div style="font-size: 11.5px; color: var(--text-muted);">Mức thăm trúng: <strong>${formatMoney(cycle.winningBidAmount)}</strong></div>
           </div>
           <div style="text-align: right;">
-            <div style="font-size: 11.5px; color: var(--text-muted);">Tiền hốt thực nhận:</div>
-            <strong style="font-size: 16px; color: var(--primary);">${formatMoney(cycle.potAmount)}</strong>
+            <div style="font-size: 11.5px; color: var(--text-muted);">Tiền thực giao người hốt:</div>
+            <strong style="font-size: 18px; color: var(--primary);">${formatMoney(cycle.potAmount)}</strong>
           </div>
         </div>
-        <div style="display: flex; justify-content: space-between; font-size: 12px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #bbf7d0;">
-          <span>Mức thăm trúng: <strong>${formatMoney(cycle.winningBidAmount)}</strong></span>
-          <span>Tiền thảo chủ hụi: <strong>${formatMoney(cycle.commissionAmount)}</strong></span>
+
+        <!-- Chi tiết quyết toán -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; margin-top: 8px;">
+          <div style="background: #fef2f2; padding: 6px 8px; border-radius: 6px;">
+            <span style="color: #991b1b;">🔴 Hụi Chết (${settlement.deadSharesCount} phần):</span><br/>
+            <strong>${formatMoney(settlement.totalDeadAmount)}</strong>
+          </div>
+          <div style="background: #f0fdf4; padding: 6px 8px; border-radius: 6px;">
+            <span style="color: #166534;">🟢 Hụi Sống (${settlement.liveSharesCount} phần):</span><br/>
+            <strong>${formatMoney(settlement.totalLiveAmount)}</strong>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; font-size: 12.5px; margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border-color);">
+          <span>💰 Tổng tiền gom: <strong>${formatMoney(cycle.totalExpected)}</strong></span>
+          <span style="color: #b45309;">🏷️ Tiền thảo chủ hụi: <strong style="color: var(--accent);">- ${formatMoney(cycle.commissionAmount)}</strong></span>
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <button class="btn btn-primary btn-sm btn-block" id="btn-view-payout-voucher" style="padding: 9px; font-weight: 700;">
+            📄 Xuất Phiếu Bàn Giao Tiền & Trừ Thảo
+          </button>
         </div>
       </div>
     ` : ''}
@@ -96,77 +123,46 @@ export function renderCyclePayments(container, cycleId) {
       `}
     </div>
 
-    <!-- Danh sách các khoản đóng của từng hụi viên -->
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">
-          📋 Danh sách chi tiết đóng tiền (${payments.length})
+    <!-- 1. DANH SÁCH HỤI CHẾT (ĐÓNG ĐỦ GỐC) -->
+    ${deadPayments.length > 0 ? `
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title" style="color: #991b1b;">
+            🔴 Danh Sách Hụi Chết (${deadPayments.length} người - Đóng đủ ${formatMoney(group.baseAmount)}/phần)
+          </div>
+        </div>
+        <div class="item-list">
+          ${deadPayments.map(p => renderPaymentRow(p, group, cycle, acc)).join('')}
         </div>
       </div>
+    ` : ''}
 
-      <div class="item-list">
-        ${payments.map(p => {
-          const profile = store.state.profiles.find(prof => prof.id === p.memberProfileId);
-          const isWinner = p.memberProfileId === cycle.winnerMemberProfileId;
-          const isPaid = p.status === 'paid';
-          const isLate = p.status === 'late';
+    <!-- 2. DANH SÁCH HỤI SỐNG (ĐÃ TRỪ TIỀN THĂM) -->
+    ${livePayments.length > 0 ? `
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title" style="color: #166534;">
+            🟢 Danh Sách Hụi Sống (${livePayments.length} người - Đóng ${formatMoney(group.baseAmount - cycle.winningBidAmount)}/phần)
+          </div>
+        </div>
+        <div class="item-list">
+          ${livePayments.map(p => renderPaymentRow(p, group, cycle, acc)).join('')}
+        </div>
+      </div>
+    ` : ''}
 
-          return `
-            <div class="card" style="padding: 12px; border-left: 4px solid ${isWinner ? 'var(--blue)' : (isPaid ? 'var(--primary)' : 'var(--accent)')};">
-              <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <div>
-                  <div style="display: flex; align-items: center; gap: 6px;">
-                    <strong style="font-size: 14.5px;">${profile?.fullName}</strong>
-                    ${profile?.nickname ? `<span style="font-size: 12px; color: var(--primary);">(${profile.nickname})</span>` : ''}
-                    ${isWinner ? `<span class="badge badge-info">Người hốt</span>` : ''}
-                  </div>
-                  <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
-                    ${p.sharesCount} phần • <strong>${p.isDeadHui ? 'Hụi chết (đóng đủ)' : 'Hụi sống'}</strong>
-                  </div>
-                </div>
-
-                <div style="text-align: right;">
-                  <div style="font-size: 15px; font-weight: 800; color: ${isPaid ? 'var(--primary)' : 'var(--accent)'};">
-                    ${formatMoney(p.amountDue)}
-                  </div>
-                  <span class="badge ${isPaid ? 'badge-success' : (isLate ? 'badge-danger' : 'badge-warning')}">
-                    ${isPaid ? 'Đã đóng đủ' : (isLate ? 'Trễ hạn' : 'Chưa nộp')}
-                  </span>
-                </div>
-              </div>
-
-              <!-- Chi tiết thanh toán -->
-              <div style="font-size: 12px; background: #f8fafc; padding: 6px 10px; border-radius: 6px; margin-top: 6px; display: flex; justify-content: space-between; align-items: center;">
-                <span>
-                  Phương thức: <strong>${p.paymentMethod === 'transfer' ? 'Chuyển khoản' : 'Tiền mặt'}</strong>
-                  ${p.transactionRef ? ` (${p.transactionRef})` : ''}
-                </span>
-                <span>${p.paidAt ? formatDate(p.paidAt) : 'Chưa thu'}</span>
-              </div>
-
-              <!-- Thao tác thu tiền & VietQR -->
-              <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-color); flex-wrap: wrap;">
-                ${!isWinner && !isPaid ? `
-                  <button class="btn btn-sm btn-outline btn-show-vietqr-pay" data-id="${p.id}" style="color: var(--primary); border-color: #86efac;">
-                    📱 Mã VietQR
-                  </button>
-                ` : ''}
-
-                ${!isWinner ? `
-                  <button class="btn btn-sm btn-primary btn-record-single" data-id="${p.id}">
-                    ${isPaid ? '✏️ Sửa số tiền' : '💰 Thu tiền'}
-                  </button>
-                ` : ''}
-
-                ${isPaid && !isWinner ? `
-                  <button class="btn btn-sm btn-outline btn-view-receipt-payment" data-pay-id="${p.id}">
-                    🧾 Xem biên nhận
-                  </button>
-                ` : ''}
-              </div>
-            </div>
-          `;
-        }).join('')}
+    <!-- Modal Xem & In Phiếu Giao Tiền Hốt Hụi & Quyết Toán Đầu Thảo -->
+    <div id="modal-payout-voucher-view" class="modal-overlay" style="display: none;">
+      <div class="modal-content" style="max-width: 480px;">
+        <div class="modal-header">
+          <h3 class="modal-title">Phiếu Giao Tiền Hốt Hụi</h3>
+          <button class="btn btn-sm btn-outline btn-circle" id="btn-close-voucher-modal">✕</button>
+        </div>
+        <div class="modal-body" id="payout-voucher-modal-body"></div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" id="btn-print-voucher" style="flex: 1;">🖨️ In Phiếu</button>
+          <button class="btn btn-primary" id="btn-share-voucher-zalo" style="flex: 1;">📲 Gửi Zalo</button>
+        </div>
       </div>
     </div>
 
@@ -177,9 +173,7 @@ export function renderCyclePayments(container, cycleId) {
           <h3 class="modal-title">📱 Mã VietQR Thanh Toán</h3>
           <button class="btn btn-sm btn-outline btn-circle" id="btn-close-vietqr-modal">✕</button>
         </div>
-        <div class="modal-body" id="vietqr-modal-body">
-          <!-- QR Image inserted dynamically -->
-        </div>
+        <div class="modal-body" id="vietqr-modal-body"></div>
         <div class="modal-footer" style="flex-direction: column; gap: 8px;">
           <button class="btn btn-primary btn-block" id="btn-copy-vietqr-zalo">
             📲 Sao chép tin nhắn Zalo gửi hụi viên
@@ -241,12 +235,10 @@ export function renderCyclePayments(container, cycleId) {
     <div id="modal-receipt-view" class="modal-overlay" style="display: none;">
       <div class="modal-content">
         <div class="modal-header">
-          <h3 class="modal-title">🧾 Biên Nhận Thu Tiền Hụi</h3>
+          <h3 class="modal-title">🧾 Biên Nhận Đóng Tiền Hụi</h3>
           <button class="btn btn-sm btn-outline btn-circle" id="btn-close-receipt-modal">✕</button>
         </div>
-        <div class="modal-body" id="receipt-modal-body">
-          <!-- In nội dung biên nhận -->
-        </div>
+        <div class="modal-body" id="receipt-modal-body"></div>
         <div class="modal-footer">
           <button class="btn btn-outline" id="btn-print-receipt" style="flex: 1;">🖨️ In / Lưu PDF</button>
           <button class="btn btn-primary" id="btn-share-receipt-zalo" style="flex: 1;">📲 Gửi Zalo</button>
@@ -255,7 +247,168 @@ export function renderCyclePayments(container, cycleId) {
     </div>
   `;
 
-  // Xử lý Modal VietQR
+  // Hàm render hàng đóng tiền
+  function renderPaymentRow(p, grp, cyc, account) {
+    const profile = store.state.profiles.find(prof => prof.id === p.memberProfileId);
+    const isPaid = p.status === 'paid';
+    const isLate = p.status === 'late';
+
+    return `
+      <div class="card" style="padding: 10px; border-left: 4px solid ${isPaid ? 'var(--primary)' : 'var(--accent)'}; margin-bottom: 6px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <strong style="font-size: 14px;">${escapeHtml(profile?.fullName || 'Hụi viên')}</strong>
+              ${profile?.nickname ? `<span style="font-size: 12px; color: var(--primary);">(${escapeHtml(profile.nickname)})</span>` : ''}
+            </div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">
+              ${p.sharesCount} phần • <strong>${p.isDeadHui ? '🔴 Hụi chết' : '🟢 Hụi sống'}</strong>
+            </div>
+          </div>
+
+          <div style="text-align: right;">
+            <div style="font-size: 14.5px; font-weight: 800; color: ${isPaid ? 'var(--primary)' : 'var(--accent)'};">
+              ${formatMoney(p.amountDue)}
+            </div>
+            <span class="badge ${isPaid ? 'badge-success' : (isLate ? 'badge-danger' : 'badge-warning')}">
+              ${isPaid ? 'Đã nộp đủ' : (isLate ? 'Trễ hạn' : 'Chưa nộp')}
+            </span>
+          </div>
+        </div>
+
+        <!-- Thao tác thu tiền & VietQR -->
+        <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-color); flex-wrap: wrap;">
+          ${!isPaid ? `
+            <button class="btn btn-sm btn-outline btn-show-vietqr-pay" data-id="${p.id}" style="color: var(--primary); border-color: #86efac; font-size: 11.5px; padding: 4px 8px;">
+              📱 VietQR
+            </button>
+          ` : ''}
+
+          <button class="btn btn-sm btn-primary btn-record-single" data-id="${p.id}" style="font-size: 11.5px; padding: 4px 8px;">
+            ${isPaid ? '✏️ Sửa' : '💰 Thu tiền'}
+          </button>
+
+          ${isPaid ? `
+            <button class="btn btn-sm btn-outline btn-view-receipt-payment" data-pay-id="${p.id}" style="font-size: 11.5px; padding: 4px 8px;">
+              🧾 Biên nhận
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  // Sự kiện xem Phiếu Giao Tiền Hốt Hụi & Quyết Toán Đầu Thảo
+  document.getElementById('btn-view-payout-voucher')?.addEventListener('click', () => {
+    let voucher = (store.state.receipts || []).find(r => r.type === 'PAYOUT_VOUCHER' && r.cycleId === cycle.id);
+    if (!voucher) {
+      voucher = store.createWinnerPayoutReceipt(cycle.id);
+    }
+    if (voucher) {
+      showPayoutVoucherModal(voucher);
+    }
+  });
+
+  function showPayoutVoucherModal(voucher) {
+    const modal = document.getElementById('modal-payout-voucher-view');
+    const body = document.getElementById('payout-voucher-modal-body');
+    if (!modal || !body) return;
+
+    body.innerHTML = `
+      <div class="receipt-paper" id="printable-voucher">
+        <div style="text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 8px;">
+          <h3 style="font-size: 16px; font-weight: 800; color: #1e293b;">PHIẾU GIAO TIỀN HỐT HỤI & QUYẾT TOÁN ĐẦU THẢO</h3>
+          <div style="font-size: 11px; color: var(--text-muted);">Mã chứng từ: <strong>${escapeHtml(voucher.receiptNumber)}</strong> • Ngày lập: ${formatDateTime(voucher.createdAt)}</div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; margin-top: 8px;">
+          <div>📜 <strong>Dây hụi:</strong> ${escapeHtml(voucher.groupName)} (Góp ${formatMoney(voucher.baseAmount)}/phần, ${voucher.totalParts} phần)</div>
+          <div>🎯 <strong>Kỳ khui:</strong> Kỳ số ${voucher.cycleNumber}</div>
+          <div>🥇 <strong>Người hốt hụi:</strong> <strong>${escapeHtml(voucher.winnerName)}</strong> ${voucher.winnerNickname ? `(${escapeHtml(voucher.winnerNickname)})` : ''} - SĐT: ${escapeHtml(voucher.winnerPhone)}</div>
+          <div>🏷️ <strong>Mức tiền thăm trúng:</strong> ${formatMoney(voucher.winningBidAmount)}</div>
+
+          <!-- Bảng kê quyết toán -->
+          <div style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; margin-top: 4px;">
+            <div style="font-weight: 700; margin-bottom: 4px; color: var(--text-main);">BẢNG KÊ QUYẾT TOÁN CHI TIẾT:</div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 2px;">
+              <span>• Tiền Hụi Chết (${voucher.deadSharesCount} phần × ${formatMoney(voucher.deadAmountPerShare)}):</span>
+              <strong>${formatMoney(voucher.totalDeadAmount)}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 2px;">
+              <span>• Tiền Hụi Sống (${voucher.liveSharesCount} phần × ${formatMoney(voucher.liveAmountPerShare)}):</span>
+              <strong>${formatMoney(voucher.totalLiveAmount)}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; padding-top: 4px; border-top: 1px dashed var(--border-color); font-weight: 700;">
+              <span>Tổng cộng tiền gom từ các hụi viên:</span>
+              <span>${formatMoney(voucher.grossPot)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; color: #b45309; margin-top: 4px;">
+              <span>- Khấu trừ Tiền Đầu Thảo Chủ Hụi (${escapeHtml(voucher.commissionRuleLabel)}):</span>
+              <strong style="color: var(--accent);">- ${formatMoney(voucher.commissionAmount)}</strong>
+            </div>
+          </div>
+
+          <!-- Số tiền thực giao -->
+          <div style="background: #ecfdf5; border: 1px solid #86efac; border-radius: 8px; padding: 10px; margin-top: 4px;">
+            <div style="font-size: 11.5px; color: var(--text-muted);">SỐ TIỀN THỰC BÀN GIAO CHO NGƯỜI HỐT:</div>
+            <div style="font-size: 18px; font-weight: 800; color: var(--primary);">${formatMoney(voucher.netPayout)}</div>
+            <div style="font-size: 11.5px; font-style: italic; color: #166534;">(Bằng chữ: ${escapeHtml(voucher.netPayoutInWords)})</div>
+          </div>
+        </div>
+
+        <!-- Chữ ký 2 bên -->
+        <div style="display: flex; justify-content: space-between; margin-top: 14px; font-size: 11.5px; text-align: center;">
+          <div style="flex: 1;">
+            <strong>NGƯỜI HỐT HỤI</strong><br/>
+            <span style="font-size: 10px; color: var(--text-muted);">(Đã nhận đủ tiền)</span>
+            <div style="height: 35px;"></div>
+            <strong>${escapeHtml(voucher.winnerName)}</strong>
+          </div>
+          <div style="flex: 1;">
+            <strong>CHỦ HỤI GIAO TIỀN</strong><br/>
+            <span style="font-size: 10px; color: var(--text-muted);">(Đã bàn giao & khấu trừ)</span>
+            <div style="height: 35px;"></div>
+            <strong>${escapeHtml(acc.fullName)}</strong>
+          </div>
+        </div>
+
+        <div class="receipt-stamp">ĐÃ BÀN GIAO</div>
+      </div>
+    `;
+
+    modal.style.display = 'flex';
+  }
+
+  document.getElementById('btn-close-voucher-modal')?.addEventListener('click', () => {
+    document.getElementById('modal-payout-voucher-view').style.display = 'none';
+  });
+
+  document.getElementById('btn-print-voucher')?.addEventListener('click', () => {
+    window.print();
+  });
+
+  document.getElementById('btn-share-voucher-zalo')?.addEventListener('click', () => {
+    const voucher = (store.state.receipts || []).find(r => r.type === 'PAYOUT_VOUCHER' && r.cycleId === cycle.id);
+    if (!voucher) return;
+
+    const shareText = `📄 PHIẾU BÀN GIAO TIỀN HỐT HỤI [${voucher.receiptNumber}]\n` +
+      `- Dây hụi: ${voucher.groupName} (Kỳ ${voucher.cycleNumber})\n` +
+      `- Người nhận tiền: ${voucher.winnerName} (${voucher.winnerNickname})\n` +
+      `- Mức thăm: ${formatMoney(voucher.winningBidAmount)}\n` +
+      `-------------------------\n` +
+      `• Hụi chết (${voucher.deadSharesCount} phần): ${formatMoney(voucher.totalDeadAmount)}\n` +
+      `• Hụi sống (${voucher.liveSharesCount} phần): ${formatMoney(voucher.totalLiveAmount)}\n` +
+      `• Tổng tiền gom: ${formatMoney(voucher.grossPot)}\n` +
+      `• Trừ tiền đầu thảo chủ hụi: -${formatMoney(voucher.commissionAmount)}\n` +
+      `👉 THỰC LĨNH TRAO TAY: ${formatMoney(voucher.netPayout)}\n` +
+      `📝 Bằng chữ: ${voucher.netPayoutInWords}\n` +
+      `(Ứng dụng Quản lý Sổ Hụi)`;
+
+    navigator.clipboard?.writeText(shareText);
+    showToast('Đã sao chép nội dung phiếu giao hụi để gửi Zalo!', 'success');
+  });
+
+  // Modal VietQR
   const modalVietQR = document.getElementById('modal-vietqr-view');
   let currentShareZaloText = '';
 
@@ -269,21 +422,21 @@ export function renderCyclePayments(container, cycleId) {
         const memo = `${prof.fullName.split(' ').pop()} dong hui ${group.name.replace(/\s+/g, '')} ky ${cycle.cycleNumber}`;
         const qrUrl = generateVietQRUrl(acc.bankCode || 'VCB', acc.accountNumber || '', acc.accountHolder || acc.fullName, p.amountDue, memo);
 
-        currentShareZaloText = `📢 THÔNG BÁO ĐÓNG TIỀN HỤI\n- Kính gửi: ${prof.fullName} (${prof.nickname})\n- Dây hụi: ${group.name} (Kỳ ${cycle.cycleNumber})\n- Số tiền cần nộp: ${formatMoney(p.amountDue)}\n- Tài khoản nhận: ${acc.accountNumber} (${acc.bankName || acc.bankCode}) - Chủ TK: ${acc.accountHolder || acc.fullName}\n- Cú pháp CK: ${memo}\n(Ứng dụng Sổ Hụi)`;
+        currentShareZaloText = `📢 THÔNG BÁO ĐÓNG TIỀN HỤI\n- Kính gửi: ${prof.fullName} (${prof.nickname})\n- Dây hụi: ${group.name} (Kỳ ${cycle.cycleNumber})\n- Diện hụi: ${p.isDeadHui ? 'Hụi Chết' : 'Hụi Sống'}\n- Số tiền cần nộp: ${formatMoney(p.amountDue)}\n- Tài khoản nhận: ${acc.accountNumber} (${acc.bankName || acc.bankCode}) - Chủ TK: ${acc.accountHolder || acc.fullName}\n- Cú pháp CK: ${memo}\n(Ứng dụng Sổ Hụi)`;
 
         document.getElementById('vietqr-modal-body').innerHTML = `
           <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px;">
-            Người nộp: <strong style="color:var(--text-main);">${prof.fullName}</strong>
+            Người nộp: <strong style="color:var(--text-main);">${escapeHtml(prof.fullName)}</strong>
           </div>
           <div style="font-size: 18px; font-weight: 800; color: var(--primary); margin-bottom: 10px;">
             ${formatMoney(p.amountDue)}
           </div>
           <img src="${qrUrl}" alt="VietQR" style="width: 100%; max-width: 240px; border-radius: 8px; box-shadow: var(--shadow-sm);" />
           <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px; text-align: left; background: #f8fafc; padding: 8px; border-radius: 6px;">
-            <div>🏦 Ngân hàng: <strong>${acc.bankName || acc.bankCode || 'Vietcombank'}</strong></div>
-            <div>💳 Số TK: <strong>${acc.accountNumber || 'Chưa cấu hình'}</strong></div>
-            <div>👤 Chủ TK: <strong>${acc.accountHolder || acc.fullName}</strong></div>
-            <div>📝 Nội dung: <strong>${memo}</strong></div>
+            <div>🏦 Ngân hàng: <strong>${escapeHtml(acc.bankName || acc.bankCode || 'Vietcombank')}</strong></div>
+            <div>💳 Số TK: <strong>${escapeHtml(acc.accountNumber || 'Chưa cấu hình')}</strong></div>
+            <div>👤 Chủ TK: <strong>${escapeHtml(acc.accountHolder || acc.fullName)}</strong></div>
+            <div>📝 Nội dung: <strong>${escapeHtml(memo)}</strong></div>
           </div>
         `;
         modalVietQR.style.display = 'flex';
@@ -376,7 +529,7 @@ export function renderCyclePayments(container, cycleId) {
     const rows = [
       ['BẢNG KÊ THU TIỀN HỤI - KỲ ' + cycle.cycleNumber + ' - ' + group.name.toUpperCase()],
       ['Ngày khui:', formatDate(cycle.openDate), 'Người hốt:', winnerProfile?.fullName || 'Chưa có', 'Mức thăm:', formatMoney(cycle.winningBidAmount)],
-      ['Tổng cần thu:', formatMoney(totalDue), 'Đã thu thực tế:', formatMoney(totalPaid), 'Còn thiếu:', formatMoney(remaining)],
+      ['Tổng cần thu:', formatMoney(totalDue), 'Đã thu thực tế:', formatMoney(totalPaid), 'Tiền thảo chủ hụi:', formatMoney(cycle.commissionAmount), 'Thực giao:', formatMoney(cycle.potAmount)],
       [''],
       ['STT', 'Họ và tên', 'Biệt danh', 'Diện hụi', 'Số phần', 'Số tiền phải nộp', 'Thực nộp', 'Hình thức', 'Trạng thái', 'Ghi chú']
     ];
@@ -423,20 +576,20 @@ export function renderCyclePayments(container, cycleId) {
       <div class="receipt-paper" id="printable-receipt">
         <div style="text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 8px;">
           <h3 style="font-size: 16px; font-weight: 800; letter-spacing: 0.5px;">BIÊN NHẬN ĐÓNG TIỀN HỤI</h3>
-          <div style="font-size: 11.5px; color: var(--text-muted);">${rec.shopName || acc.shopName || 'Sổ Hụi Miền Nam'} • Phiếu: <strong>${rec.receiptNumber}</strong></div>
+          <div style="font-size: 11.5px; color: var(--text-muted);">${rec.shopName || acc.shopName || 'Sổ Hụi Miền Nam'} • Phiếu: <strong>${escapeHtml(rec.receiptNumber)}</strong></div>
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; margin-top: 6px;">
-          <div>👤 Người nộp tiền: <strong>${rec.payerName}</strong></div>
-          <div>👩‍💼 Người thu tiền: <strong>${rec.receiverName}</strong> (Chủ hụi)</div>
-          <div>📜 Dây hụi: <strong>${rec.huiName}</strong></div>
+          <div>👤 Người nộp tiền: <strong>${escapeHtml(rec.payerName)}</strong></div>
+          <div>👩‍💼 Người thu tiền: <strong>${escapeHtml(rec.receiverName)}</strong> (Chủ hụi)</div>
+          <div>📜 Dây hụi: <strong>${escapeHtml(rec.huiName)}</strong></div>
           <div>🎯 Kỳ đóng: <strong>Kỳ số ${rec.cycleNumber}</strong></div>
-          <div>💳 Phương thức: <strong>${rec.paymentMethod}</strong></div>
+          <div>💳 Phương thức: <strong>${escapeHtml(rec.paymentMethod)}</strong></div>
           <div>📅 Ngày giờ lập: <strong>${rec.paymentDate}</strong></div>
           <div style="background: #f8fafc; padding: 8px; border-radius: 6px; margin-top: 4px; border: 1px solid #e2e8f0;">
             <div style="font-size: 12px; color: var(--text-muted);">Số tiền đã thu:</div>
             <div style="font-size: 18px; font-weight: 800; color: var(--primary);">${formatMoney(rec.amount)}</div>
-            <div style="font-size: 11.5px; font-style: italic; color: #475569;">(Bằng chữ: ${rec.amountInWords})</div>
+            <div style="font-size: 11.5px; font-style: italic; color: #475569;">(Bằng chữ: ${escapeHtml(rec.amountInWords)})</div>
           </div>
         </div>
 
@@ -445,13 +598,13 @@ export function renderCyclePayments(container, cycleId) {
             <strong>Người nộp tiền</strong><br/>
             <span style="font-size: 10.5px; color: var(--text-muted);">(Ký, ghi rõ họ tên)</span>
             <div style="height: 40px;"></div>
-            <span>${rec.payerName.split('(')[0]}</span>
+            <span>${escapeHtml(rec.payerName.split('(')[0])}</span>
           </div>
           <div>
             <strong>Người thu tiền (Chủ hụi)</strong><br/>
             <span style="font-size: 10.5px; color: var(--text-muted);">(Đã nhận đủ tiền)</span>
             <div style="height: 40px;"></div>
-            <span>${rec.receiverName.split('(')[0]}</span>
+            <span>${escapeHtml(rec.receiverName.split('(')[0])}</span>
           </div>
         </div>
 
@@ -471,7 +624,6 @@ export function renderCyclePayments(container, cycleId) {
     });
   }
 
-  // Toàn cục để member view có thể gọi
   window.viewReceiptDetail = (recId) => {
     const rec = store.state.receipts.find(r => r.id === recId);
     if (rec) showReceiptModal(rec);

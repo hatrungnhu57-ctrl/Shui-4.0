@@ -173,6 +173,8 @@ class SoHuiStore {
       payments: [],
       receipts: [],
       randomDraws: [],
+      messages: [],
+      ballots: [],
       logs: [
         {
           id: 'log-init-' + Date.now(),
@@ -202,6 +204,31 @@ class SoHuiStore {
       payments: JSON.parse(JSON.stringify(INITIAL_PAYMENTS)),
       receipts: JSON.parse(JSON.stringify(INITIAL_RECEIPTS)),
       randomDraws: JSON.parse(JSON.stringify(INITIAL_RANDOM_DRAWS)),
+      messages: [
+        {
+          id: 'msg-demo-1',
+          groupId: INITIAL_GROUPS[0].id,
+          senderId: 'acc-demo-cobay',
+          senderName: 'Cô Bảy (Chủ Hụi)',
+          senderRole: 'owner',
+          senderPhone: '0918123456',
+          text: 'Chào cả nhà, dây hụi 2 Triệu Chợ Chiều đã mở nhóm trò chuyện chính thức! Mọi người có thể theo dõi lịch khui và bỏ thăm kín trực tiếp tại đây nhé.',
+          type: 'text',
+          createdAt: '2026-01-05 08:30:00'
+        },
+        {
+          id: 'msg-demo-2',
+          groupId: INITIAL_GROUPS[0].id,
+          senderId: 'acc-demo-bakhia',
+          senderName: 'Anh Ba Khía',
+          senderRole: 'member',
+          senderPhone: '0903987654',
+          text: 'Dạ chào Cô Bảy! Nhóm tiện quá, kỳ này tôi đăng ký bỏ thăm sớm nha.',
+          type: 'text',
+          createdAt: '2026-01-05 09:15:00'
+        }
+      ],
+      ballots: [],
       logs: JSON.parse(JSON.stringify(INITIAL_ACTIVITY_LOGS)),
       notifications: JSON.parse(JSON.stringify(INITIAL_NOTIFICATIONS))
     };
@@ -219,6 +246,8 @@ class SoHuiStore {
       payments: [],
       receipts: [],
       randomDraws: [],
+      messages: [],
+      ballots: [],
       logs: [
         {
           id: 'log-init-' + Date.now(),
@@ -695,7 +724,9 @@ class SoHuiStore {
       startDate: groupData.startDate || new Date().toISOString().split('T')[0],
       openDayRule: groupData.openDayRule || 'Định kỳ hàng tháng',
       drawMethod: groupData.drawMethod || 'bidding',
+      commissionType: groupData.commissionType || 'half_share',
       commissionRate: Number(groupData.commissionRate) || 50,
+      commissionAmountFixed: Number(groupData.commissionAmountFixed) || 0,
       status: 'active',
       agreementNotes: groupData.agreementNotes || '',
       createdBy: this.currentAccount.id,
@@ -747,6 +778,291 @@ class SoHuiStore {
     return newGroup;
   }
 
+  // SANG SỔ HỤI ĐANG CHẠY (TỪ SỔ GIẤY CŨ VÀO APP)
+  migrateExistingGroup(groupData, membersData, pastCyclesData) {
+    if (!groupData.name || !groupData.baseAmount || !groupData.totalParts) {
+      throw new Error('Vui lòng điền đầy đủ tên dây hụi, mức góp và số phần!');
+    }
+
+    const newGroup = {
+      id: 'grp-' + Date.now(),
+      name: groupData.name.trim(),
+      baseAmount: Number(groupData.baseAmount),
+      totalParts: Number(groupData.totalParts),
+      periodType: groupData.periodType || 'month',
+      startDate: groupData.startDate || new Date().toISOString().split('T')[0],
+      openDayRule: groupData.openDayRule || 'Định kỳ',
+      drawMethod: groupData.drawMethod || 'bidding',
+      commissionRate: Number(groupData.commissionRate) || 50,
+      status: 'active',
+      agreementNotes: groupData.agreementNotes || 'Sang sổ từ sổ giấy cũ vào ứng dụng.',
+      createdBy: this.currentAccount.id,
+      createdAt: new Date().toISOString().split('T')[0],
+      isMigrated: true
+    };
+
+    this.state.groups.push(newGroup);
+
+    // 1. Thêm thành viên vào dây
+    const groupMemberMap = {};
+    for (const mem of membersData) {
+      const shares = Number(mem.sharesCount) || 1;
+      const newGroupMem = {
+        id: 'gm-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+        groupId: newGroup.id,
+        memberProfileId: mem.memberProfileId,
+        sharesCount: shares,
+        hotedCycles: [],
+        status: 'active',
+        joinDate: newGroup.startDate,
+        notes: mem.notes || ''
+      };
+      this.state.groupMembers.push(newGroupMem);
+      groupMemberMap[mem.memberProfileId] = newGroupMem;
+
+      const prof = this.state.profiles.find(p => p.id === mem.memberProfileId);
+      if (prof) prof.activeHuiCount = (prof.activeHuiCount || 0) + 1;
+    }
+
+    // 2. Xử lý các kỳ ĐÃ KHUI trong quá khứ
+    const pastCycles = Array.isArray(pastCyclesData) ? pastCyclesData : [];
+    pastCycles.forEach(pc => {
+      const cycleNum = Number(pc.cycleNumber);
+      const winnerId = pc.winnerMemberProfileId;
+      const bid = Number(pc.winningBidAmount) || 0;
+
+      const pastCycle = {
+        id: 'cyc-' + Date.now() + '-' + cycleNum,
+        groupId: newGroup.id,
+        cycleNumber: cycleNum,
+        openDate: pc.openDate || newGroup.startDate,
+        winnerMemberProfileId: winnerId,
+        winningBidAmount: bid,
+        totalCollected: newGroup.baseAmount * (newGroup.totalParts - 1),
+        totalExpected: newGroup.baseAmount * (newGroup.totalParts - 1),
+        potAmount: newGroup.baseAmount * (newGroup.totalParts - 1),
+        commissionAmount: cycleNum > 1 ? (newGroup.baseAmount * newGroup.commissionRate) / 100 : 0,
+        status: 'closed',
+        incidentNote: `Kỳ ${cycleNum} đã khui từ sổ giấy cũ.`,
+        closedAt: pc.openDate || newGroup.startDate,
+        closedBy: this.currentAccount.id
+      };
+      this.state.cycles.push(pastCycle);
+
+      // Cập nhật trạng thái người đã hốt
+      if (winnerId && groupMemberMap[winnerId]) {
+        groupMemberMap[winnerId].hotedCycles.push(cycleNum);
+        groupMemberMap[winnerId].status = 'hoted';
+        const prof = this.state.profiles.find(p => p.id === winnerId);
+        if (prof) prof.hotedCount = (prof.hotedCount || 0) + 1;
+      }
+    });
+
+    // 3. Tạo kỳ tiếp theo đang mở để tiếp quản trên app
+    const nextCycleNumber = pastCycles.length + 1;
+    if (nextCycleNumber <= newGroup.totalParts) {
+      const nextCycle = {
+        id: 'cyc-' + Date.now() + '-next',
+        groupId: newGroup.id,
+        cycleNumber: nextCycleNumber,
+        openDate: groupData.nextCycleDate || new Date().toISOString().split('T')[0],
+        winnerMemberProfileId: null,
+        winningBidAmount: 0,
+        totalCollected: 0,
+        totalExpected: newGroup.baseAmount * (newGroup.totalParts - 1),
+        potAmount: newGroup.baseAmount * (newGroup.totalParts - 1),
+        commissionAmount: 0,
+        status: 'open',
+        incidentNote: `Kỳ ${nextCycleNumber} tiếp quản trên app Sổ Hụi.`,
+        closedAt: null,
+        closedBy: null
+      };
+      this.state.cycles.push(nextCycle);
+    } else {
+      newGroup.status = 'completed';
+    }
+
+    this.logAction('MIGRATE_HUI', 'HuiGroup', newGroup.id, `Sang sổ hụi từ sổ giấy "${newGroup.name}" (${pastCycles.length}/${newGroup.totalParts} kỳ đã khui).`);
+    this.saveState();
+    return newGroup;
+  }
+
+  // MUA BÁN & CHUYỂN NHƯỢNG CHÂN HỤI (SANG CHÂN HỤI SỐNG / CHẾT)
+  transferHuiSlot(groupId, oldMemberProfileId, newMemberProfileId, transferType = 'live', transferPrice = 0, agreementNotes = '') {
+    const group = this.state.groups.find(g => g.id === groupId);
+    if (!group) throw new Error('Không tìm thấy dây hụi!');
+
+    const oldProf = this.state.profiles.find(p => p.id === oldMemberProfileId);
+    const newProf = this.state.profiles.find(p => p.id === newMemberProfileId);
+    if (!oldProf || !newProf) throw new Error('Không tìm thấy thông tin người bán hoặc người mua!');
+
+    const groupMember = this.state.groupMembers.find(gm => gm.groupId === groupId && gm.memberProfileId === oldMemberProfileId);
+    if (!groupMember) throw new Error('Hụi viên này không có chân hụi trong dây!');
+
+    const price = Number(transferPrice) || 0;
+    const isLive = transferType === 'live';
+
+    // Chuyển quyền sở hữu chân hụi sang thành viên mới
+    groupMember.memberProfileId = newMemberProfileId;
+    groupMember.notes = (groupMember.notes ? groupMember.notes + ' | ' : '') + `[Sang nhượng từ ${oldProf.fullName} ngày ${new Date().toISOString().split('T')[0]}]`;
+
+    // Cập nhật số dây đang chơi của 2 hồ sơ
+    oldProf.activeHuiCount = Math.max(0, (oldProf.activeHuiCount || 1) - 1);
+    newProf.activeHuiCount = (newProf.activeHuiCount || 0) + 1;
+
+    // Tạo biên nhận / Giấy cam kết chuyển nhượng chân hụi
+    const transferReceipt = {
+      id: 'trans-' + Date.now(),
+      receiptNumber: 'CN-' + Date.now().toString().slice(-6),
+      type: 'TRANSFER_HUI',
+      groupId: group.id,
+      groupName: group.name,
+      baseAmount: group.baseAmount,
+      transferType: isLive ? 'Hụi Sống (Chưa hốt)' : 'Hụi Chết (Đã hốt)',
+      oldMemberId: oldProf.id,
+      oldMemberName: oldProf.fullName,
+      oldMemberPhone: oldProf.phone,
+      newMemberId: newProf.id,
+      newMemberName: newProf.fullName,
+      newMemberPhone: newProf.phone,
+      transferPrice: price,
+      agreementNotes: agreementNotes || 'Hai bên tự nguyện chuyển nhượng quyền lợi và nghĩa vụ chân hụi với sự chứng kiến của Chủ hụi.',
+      createdAt: new Date().toISOString()
+    };
+
+    this.state.receipts = this.state.receipts || [];
+    this.state.receipts.unshift(transferReceipt);
+
+    this.logAction(
+      'TRANSFER_HUI',
+      'HuiGroup',
+      group.id,
+      `Chuyển nhượng chân hụi [${isLive ? 'Hụi Sống' : 'Hụi Chết'}]: Từ "${oldProf.fullName}" sang "${newProf.fullName}" với giá ${price.toLocaleString('vi-VN')}đ`
+    );
+
+    this.saveState();
+    return transferReceipt;
+  }
+
+  // --- 8B. BỘ TÍNH TOÁN DÒNG TIỀN HỤI & TRỪ TIỀN ĐẦU THẢO TỰ ĐỘNG CHUẨN MIỀN NAM ---
+  calculateCycleSettlement(group, cycleNumber, winningBidAmount = 0, winnerProfileId = null, customCommission = null) {
+    if (!group) return null;
+
+    const baseAmount = Number(group.baseAmount) || 0;
+    const totalParts = Number(group.totalParts) || 0;
+    const cycleNum = Number(cycleNumber) || 1;
+    const bid = Math.max(0, Number(winningBidAmount) || 0);
+
+    const membersInGroup = this.state.groupMembers.filter(gm => gm.groupId === group.id);
+
+    let deadSharesCount = 0;
+    let liveSharesCount = 0;
+    const memberBreakdown = [];
+
+    if (membersInGroup.length > 0) {
+      membersInGroup.forEach(gm => {
+        const prof = this.state.profiles.find(p => p.id === gm.memberProfileId);
+        const hasHotedBefore = (gm.hotedCycles || []).some(c => c < cycleNum);
+        const isWinner = winnerProfileId && gm.memberProfileId === winnerProfileId;
+
+        const shares = Number(gm.sharesCount) || 1;
+
+        if (isWinner) {
+          // Phần hụi trúng kỳ này của người hốt không nộp vào hũ tiền
+          if (shares > 1) {
+            // Nếu người này chơi nhiều phần hụi
+            if (hasHotedBefore) {
+              deadSharesCount += (shares - 1);
+            } else {
+              liveSharesCount += (shares - 1);
+            }
+          }
+        } else {
+          if (hasHotedBefore) {
+            deadSharesCount += shares;
+          } else {
+            liveSharesCount += shares;
+          }
+        }
+
+        const singleDue = hasHotedBefore ? baseAmount : Math.max(0, baseAmount - bid);
+        const amountDue = isWinner ? 0 : (singleDue * shares);
+
+        memberBreakdown.push({
+          memberProfileId: gm.memberProfileId,
+          fullName: prof ? prof.fullName : 'Hụi viên',
+          nickname: prof ? prof.nickname : '',
+          phone: prof ? prof.phone : '',
+          sharesCount: shares,
+          isDeadHui: hasHotedBefore,
+          isWinner: !!isWinner,
+          singleDue,
+          amountDue,
+          statusNote: isWinner ? '🏆 Người hốt kỳ này' : (hasHotedBefore ? '🔴 Hụi chết (đóng đủ)' : `🟢 Hụi sống (trừ thăm ${bid.toLocaleString('vi-VN')}đ)`)
+        });
+      });
+    } else {
+      deadSharesCount = Math.max(0, cycleNum - 1);
+      liveSharesCount = Math.max(0, totalParts - cycleNum);
+    }
+
+    const deadAmountPerShare = baseAmount;
+    const liveAmountPerShare = Math.max(0, baseAmount - bid);
+    const totalDeadAmount = deadSharesCount * deadAmountPerShare;
+    const totalLiveAmount = liveSharesCount * liveAmountPerShare;
+    const grossPot = totalDeadAmount + totalLiveAmount;
+
+    // Tính tiền đầu thảo chủ hụi
+    let commissionAmount = 0;
+    let commissionRuleLabel = 'Nửa phần hụi (50%)';
+
+    if (customCommission !== null && customCommission !== undefined && !isNaN(customCommission)) {
+      commissionAmount = Math.max(0, Number(customCommission));
+      commissionRuleLabel = 'Tùy chỉnh riêng kỳ này';
+    } else {
+      const commType = group.commissionType || (group.commissionRate === 100 ? 'full_share' : 'half_share');
+      if (commType === 'full_share' || group.commissionRate === 100) {
+        commissionAmount = baseAmount;
+        commissionRuleLabel = 'Một phần hụi (100%)';
+      } else if (commType === 'fixed') {
+        commissionAmount = Number(group.commissionAmountFixed || group.commissionRate || 0);
+        commissionRuleLabel = `Cố định (${commissionAmount.toLocaleString('vi-VN')}đ)`;
+      } else if (commType === 'percent') {
+        const rate = Number(group.commissionRate) || 50;
+        commissionAmount = Math.round((baseAmount * rate) / 100);
+        commissionRuleLabel = `${rate}% mức góp`;
+      } else {
+        const rate = Number(group.commissionRate) || 50;
+        commissionAmount = Math.round((baseAmount * rate) / 100);
+        commissionRuleLabel = `Nửa phần (${rate}%)`;
+      }
+    }
+
+    // Tiền người hốt thực lĩnh sau khi trừ đầu thảo
+    const netPayout = Math.max(0, grossPot - commissionAmount);
+
+    return {
+      groupId: group.id,
+      groupName: group.name,
+      baseAmount,
+      totalParts,
+      cycleNumber: cycleNum,
+      winningBidAmount: bid,
+      deadSharesCount,
+      deadAmountPerShare,
+      totalDeadAmount,
+      liveSharesCount,
+      liveAmountPerShare,
+      totalLiveAmount,
+      grossPot,
+      commissionAmount,
+      commissionRuleLabel,
+      netPayout,
+      netPayoutInWords: this.numberToVietnameseWords(netPayout),
+      memberBreakdown
+    };
+  }
+
   // --- 9. KHUI HỤI & TÍNH TIỀN KỲ HỤI ---
   executeCycleDraw(cycleId, winnerProfileId, winningBidAmount, drawType, drawDetails = {}) {
     const cycle = this.state.cycles.find(c => c.id === cycleId);
@@ -772,52 +1088,42 @@ class SoHuiStore {
     }
     winnerProfile.hotedCount = (winnerProfile.hotedCount || 0) + 1;
 
-    let commission = 0;
-    if (group.commissionRate > 0 && cycle.cycleNumber > 1) {
-      commission = (group.baseAmount * group.commissionRate) / 100;
-    }
-    cycle.commissionAmount = commission;
+    // Tự động tính toán dòng tiền và trừ tiền đầu thảo chuẩn xác
+    const customCommission = drawDetails.customCommission !== undefined ? drawDetails.customCommission : null;
+    const settlement = this.calculateCycleSettlement(group, cycle.cycleNumber, bid, winnerProfileId, customCommission);
+
+    cycle.commissionAmount = settlement.commissionAmount;
+    cycle.commissionRuleLabel = settlement.commissionRuleLabel;
+    cycle.totalExpected = settlement.grossPot;
+    cycle.potAmount = settlement.netPayout;
+    cycle.deadSharesCount = settlement.deadSharesCount;
+    cycle.liveSharesCount = settlement.liveSharesCount;
+    cycle.totalDeadAmount = settlement.totalDeadAmount;
+    cycle.totalLiveAmount = settlement.totalLiveAmount;
 
     this.state.payments = this.state.payments.filter(p => p.cycleId !== cycle.id);
 
-    const membersInGroup = this.state.groupMembers.filter(gm => gm.groupId === group.id);
-    let totalExpected = 0;
-
-    membersInGroup.forEach(gm => {
-      const hasHotedBefore = gm.hotedCycles.some(cNum => cNum < cycle.cycleNumber);
-      const isDeadHui = hasHotedBefore;
-
-      let singleDue = isDeadHui ? group.baseAmount : (group.baseAmount - bid);
-      let amountDue = singleDue * gm.sharesCount;
-
-      if (gm.memberProfileId === winnerProfileId) {
-        amountDue = 0;
-      }
-
-      totalExpected += amountDue;
-
+    settlement.memberBreakdown.forEach(mb => {
       const newPayment = {
         id: 'pay-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
         cycleId: cycle.id,
         groupId: group.id,
-        memberProfileId: gm.memberProfileId,
-        sharesCount: gm.sharesCount,
-        isDeadHui,
-        amountDue,
-        amountPaid: gm.memberProfileId === winnerProfileId ? 0 : 0,
+        memberProfileId: mb.memberProfileId,
+        sharesCount: mb.sharesCount,
+        isDeadHui: mb.isDeadHui,
+        amountDue: mb.amountDue,
+        amountPaid: mb.isWinner ? 0 : 0,
         paymentMethod: 'cash',
-        status: gm.memberProfileId === winnerProfileId ? 'paid' : 'unpaid',
-        paidAt: gm.memberProfileId === winnerProfileId ? new Date().toISOString() : null,
+        status: mb.isWinner ? 'paid' : 'unpaid',
+        paidAt: mb.isWinner ? new Date().toISOString() : null,
         recordedBy: this.currentAccount.fullName,
-        note: gm.memberProfileId === winnerProfileId ? 'Phần hụi của người hốt tự trừ' : (isDeadHui ? 'Hụi chết đóng đủ gốc' : `Hụi sống (đã trừ thăm ${bid.toLocaleString('vi-VN')}đ)`),
+        note: mb.isWinner ? 'Phần hụi của người hốt kỳ này' : mb.statusNote,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
       this.state.payments.push(newPayment);
     });
 
-    cycle.totalExpected = totalExpected;
-    cycle.potAmount = totalExpected - commission;
     cycle.status = 'open';
 
     if (drawType === 'random') {
@@ -837,9 +1143,67 @@ class SoHuiStore {
       this.state.randomDraws.unshift(rdRecord);
     }
 
-    this.logAction('OPEN_CYCLE', 'HuiCycle', cycle.id, `Khui hụi Kỳ ${cycle.cycleNumber} Dây "${group.name}". Người hốt: ${winnerProfile.fullName} (${drawType === 'random' ? 'Quay Random' : 'Thăm: ' + bid.toLocaleString('vi-VN') + 'đ'})`, oldCycle, cycle);
+    // Tự động sinh Phiếu Giao Tiền Hốt Hụi & Quyết Toán Đầu Thảo
+    this.createWinnerPayoutReceipt(cycle.id);
+
+    this.logAction(
+      'OPEN_CYCLE',
+      'HuiCycle',
+      cycle.id,
+      `Khui hụi Kỳ ${cycle.cycleNumber} Dây "${group.name}". Người hốt: ${winnerProfile.fullName} (Gom: ${settlement.grossPot.toLocaleString('vi-VN')}đ, Trừ thảo: ${settlement.commissionAmount.toLocaleString('vi-VN')}đ, Thực lĩnh: ${settlement.netPayout.toLocaleString('vi-VN')}đ)`,
+      oldCycle,
+      cycle
+    );
     this.saveState();
     return cycle;
+  }
+
+  // XUẤT PHIẾU GIAO TIỀN HỐT HỤI & QUYẾT TOÁN ĐẦU THẢO (PAYOUT VOUCHER)
+  createWinnerPayoutReceipt(cycleId, note = '') {
+    const cycle = this.state.cycles.find(c => c.id === cycleId);
+    if (!cycle) return null;
+    const group = this.state.groups.find(g => g.id === cycle.groupId);
+    const winnerProf = this.state.profiles.find(p => p.id === cycle.winnerMemberProfileId);
+    if (!group || !winnerProf) return null;
+
+    const settlement = this.calculateCycleSettlement(group, cycle.cycleNumber, cycle.winningBidAmount, winnerProf.id, cycle.commissionAmount);
+
+    const voucher = {
+      id: 'vouch-' + Date.now(),
+      receiptNumber: `GH-${new Date().getFullYear()}${(new Date().getMonth() + 1).toString().padStart(2, '0')}-${Math.floor(100 + Math.random() * 900)}`,
+      type: 'PAYOUT_VOUCHER',
+      cycleId: cycle.id,
+      groupId: group.id,
+      groupName: group.name,
+      cycleNumber: cycle.cycleNumber,
+      winnerId: winnerProf.id,
+      winnerName: winnerProf.fullName,
+      winnerNickname: winnerProf.nickname || '',
+      winnerPhone: winnerProf.phone,
+      winnerAddress: winnerProf.address || '',
+      baseAmount: group.baseAmount,
+      totalParts: group.totalParts,
+      winningBidAmount: cycle.winningBidAmount,
+      deadSharesCount: settlement.deadSharesCount,
+      deadAmountPerShare: settlement.deadAmountPerShare,
+      totalDeadAmount: settlement.totalDeadAmount,
+      liveSharesCount: settlement.liveSharesCount,
+      liveAmountPerShare: settlement.liveAmountPerShare,
+      totalLiveAmount: settlement.totalLiveAmount,
+      grossPot: settlement.grossPot,
+      commissionAmount: settlement.commissionAmount,
+      commissionRuleLabel: settlement.commissionRuleLabel,
+      netPayout: settlement.netPayout,
+      netPayoutInWords: settlement.netPayoutInWords,
+      note: note || 'Chủ hụi đã quyết toán và bàn giao đủ số tiền hốt sau khi trừ tiền đầu thảo theo thỏa thuận.',
+      createdAt: new Date().toISOString()
+    };
+
+    this.state.receipts = this.state.receipts || [];
+    this.state.receipts = this.state.receipts.filter(r => !(r.type === 'PAYOUT_VOUCHER' && r.cycleId === cycle.id));
+    this.state.receipts.unshift(voucher);
+    this.saveState();
+    return voucher;
   }
 
   // --- 10. GHI NHẬN ĐÓNG TIỀN & XUẤT BIÊN NHẬN ---
@@ -959,6 +1323,249 @@ class SoHuiStore {
     } catch (e) {
       return new Date().toISOString().split('T')[0];
     }
+  }
+
+  // --- 13. PHÒNG TRÒ CHUYỆN & ĐẤU HỤI BỎ THĂM KÍN TRỰC TUYẾN ---
+  sendGroupMessage(groupId, text, type = 'text', data = null) {
+    if (!groupId || !text || !text.trim()) return null;
+
+    this.state.messages = this.state.messages || [];
+
+    const sender = this.currentAccount;
+    const newMsg = {
+      id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      groupId,
+      senderId: sender.id,
+      senderName: sender.fullName || 'Thành viên',
+      senderRole: sender.role || 'member',
+      senderPhone: sender.phone || '',
+      text: text.trim(),
+      type: type || 'text',
+      data: data || null,
+      createdAt: new Date().toISOString().replace('T', ' ').substr(0, 19)
+    };
+
+    this.state.messages.push(newMsg);
+    this.saveState();
+    return newMsg;
+  }
+
+  getGroupMessages(groupId) {
+    this.state.messages = this.state.messages || [];
+    return this.state.messages.filter(m => m.groupId === groupId);
+  }
+
+  // NỘP PHIẾU THĂM KÍN TRỰC TUYẾN
+  submitSecretBallot(groupId, cycleId, memberProfileId, bidAmount) {
+    const cycle = this.state.cycles.find(c => c.id === cycleId);
+    if (!cycle) throw new Error('Không tìm thấy kỳ hụi!');
+    const prof = this.state.profiles.find(p => p.id === memberProfileId) || { fullName: this.currentAccount.fullName, id: memberProfileId };
+
+    const bid = Number(bidAmount);
+    if (isNaN(bid) || bid < 0) throw new Error('Mức tiền thăm không hợp lệ!');
+
+    this.state.ballots = this.state.ballots || [];
+    // Cập nhật hoặc thêm mới phiếu thăm của người này
+    const existingIndex = this.state.ballots.findIndex(b => b.cycleId === cycleId && b.memberProfileId === memberProfileId);
+
+    const ballotObj = {
+      id: 'ballot-' + Date.now(),
+      groupId,
+      cycleId,
+      memberProfileId,
+      memberName: prof.fullName,
+      memberPhone: prof.phone || this.currentAccount.phone,
+      bidAmount: bid,
+      submittedAt: new Date().toISOString().replace('T', ' ').substr(0, 19),
+      isRevealed: false
+    };
+
+    if (existingIndex >= 0) {
+      this.state.ballots[existingIndex] = ballotObj;
+    } else {
+      this.state.ballots.push(ballotObj);
+    }
+
+    // Tự động gửi thông báo hệ thống vào phòng chat nhóm
+    this.sendGroupMessage(
+      groupId,
+      `🗳️ Thành viên [${prof.fullName}] đã gửi phiếu thăm kín cho Kỳ ${cycle.cycleNumber}. (Số tiền được bảo mật tuyệt đối)`,
+      'ballot_submitted',
+      { memberProfileId, cycleId }
+    );
+
+    this.saveState();
+    return ballotObj;
+  }
+
+  getCycleBallots(groupId, cycleId) {
+    this.state.ballots = this.state.ballots || [];
+    return this.state.ballots.filter(b => b.groupId === groupId && b.cycleId === cycleId);
+  }
+
+  // MỞ PHIẾU THĂM KÍN & TỰ ĐỘNG CÔNG BỐ KẾT QUẢ VÀO PHÒNG CHAT
+  revealSecretBallots(groupId, cycleId) {
+    const cycle = this.state.cycles.find(c => c.id === cycleId);
+    if (!cycle) throw new Error('Không tìm thấy kỳ hụi!');
+    const group = this.state.groups.find(g => g.id === groupId);
+    if (!group) throw new Error('Không tìm thấy dây hụi!');
+
+    const ballots = this.getCycleBallots(groupId, cycleId);
+    if (ballots.length === 0) {
+      throw new Error('Chưa có ai nộp phiếu thăm kín cho kỳ này!');
+    }
+
+    // Đánh dấu đã mở thăm
+    ballots.forEach(b => b.isRevealed = true);
+
+    // Tìm người bỏ thăm cao nhất
+    let winningBallot = ballots[0];
+    for (const b of ballots) {
+      if (b.bidAmount > winningBallot.bidAmount) {
+        winningBallot = b;
+      }
+    }
+
+    // Thực hiện khui hụi chính thức
+    this.executeCycleDraw(cycleId, winningBallot.memberProfileId, winningBallot.bidAmount, 'secret_ballot');
+
+    const settlement = this.calculateCycleSettlement(group, cycle.cycleNumber, winningBallot.bidAmount, winningBallot.memberProfileId);
+
+    // Gửi thông báo công bố người thắng vào nhóm chat
+    this.sendGroupMessage(
+      groupId,
+      `🎉 KẾT QUẢ MỞ THĂM KÍN KỲ ${cycle.cycleNumber}:\n` +
+      `🥇 Người trúng hụi: ${winningBallot.memberName} (Mức thăm: ${winningBallot.bidAmount.toLocaleString('vi-VN')}đ)\n` +
+      `💰 Tổng tiền gom: ${settlement.grossPot.toLocaleString('vi-VN')}đ\n` +
+      `🏷️ Trừ tiền đầu thảo: -${settlement.commissionAmount.toLocaleString('vi-VN')}đ\n` +
+      `💵 Thực giao người hốt: ${settlement.netPayout.toLocaleString('vi-VN')}đ`,
+      'draw_result',
+      { winnerId: winningBallot.memberProfileId, winningBid: winningBallot.bidAmount, netPayout: settlement.netPayout }
+    );
+
+    this.saveState();
+    return { winningBallot, ballots, settlement };
+  }
+
+  // TÍNH TOÁN LỢI NHUẬN / SINH LỜI / LÃI LỖ CHI TIẾT TỪNG THÀNH VIÊN
+  calculateGroupProfitLoss(groupId) {
+    const group = this.state.groups.find(g => g.id === groupId);
+    if (!group) return null;
+
+    const groupMembers = this.state.groupMembers.filter(gm => gm.groupId === groupId);
+    const cycles = this.state.cycles.filter(c => c.groupId === groupId).sort((a, b) => a.cycleNumber - b.cycleNumber);
+    const closedCycles = cycles.filter(c => c.status === 'closed');
+
+    const memberStats = [];
+
+    groupMembers.forEach(gm => {
+      const prof = this.state.profiles.find(p => p.id === gm.memberProfileId);
+      const hotedCycles = gm.hotedCycles || [];
+      const hasHoted = hotedCycles.length > 0;
+
+      let totalPaidSoFar = 0;
+      let totalExpectedPaidFull = 0;
+      let totalCollected = 0;
+
+      // Tính tiền thực tế đã đóng qua các kỳ đã khui
+      closedCycles.forEach(cyc => {
+        const hasHotedBeforeThis = hotedCycles.some(cNum => cNum < cyc.cycleNumber);
+        const wonThisCycle = hotedCycles.includes(cyc.cycleNumber);
+
+        if (wonThisCycle) {
+          // Kỳ này người đó hốt -> không đóng phần hụi của mình
+          const pot = cyc.potAmount || (group.baseAmount * (group.totalParts - 1) - (cyc.commissionAmount || 0));
+          totalCollected += pot;
+        } else if (hasHotedBeforeThis) {
+          // Hụi chết: đóng đủ mức gốc
+          totalPaidSoFar += (group.baseAmount * gm.sharesCount);
+        } else {
+          // Hụi sống: đóng mức gốc trừ tiền thăm
+          const bid = cyc.winningBidAmount || 0;
+          totalPaidSoFar += (Math.max(0, group.baseAmount - bid) * gm.sharesCount);
+        }
+      });
+
+      // Lợi nhuận ròng hiện tại
+      const netProfit = totalCollected > 0 ? (totalCollected - totalPaidSoFar) : 0;
+      const profitRate = totalPaidSoFar > 0 ? ((totalCollected - totalPaidSoFar) / totalPaidSoFar) * 100 : 0;
+
+      memberStats.push({
+        memberProfileId: gm.memberProfileId,
+        fullName: prof ? prof.fullName : 'Hụi viên',
+        nickname: prof ? prof.nickname : '',
+        phone: prof ? prof.phone : '',
+        sharesCount: gm.sharesCount,
+        hasHoted,
+        hotedCycles,
+        totalPaidSoFar,
+        totalCollected,
+        netProfit,
+        profitRate: Math.round(profitRate * 10) / 10,
+        statusType: hasHoted
+          ? (hotedCycles[0] <= Math.ceil(group.totalParts / 3) ? 'early_winner' : 'late_winner')
+          : 'live_member'
+      });
+    });
+
+    return {
+      group,
+      totalParts: group.totalParts,
+      closedCyclesCount: closedCycles.length,
+      memberStats
+    };
+  }
+
+  // TẠO LINK CHIA SẺ VÀO NHÓM DÂY HỤI
+  generateGroupInviteLink(groupId) {
+    const origin = window.location.origin;
+    const path = window.location.pathname;
+    return `${origin}${path}#join-group/${groupId}`;
+  }
+
+  // THAM GIA DÂY HỤI BẰNG LINK MỜI
+  joinGroupByInvite(groupId, account = this.currentAccount) {
+    const group = this.state.groups.find(g => g.id === groupId);
+    if (!group) throw new Error('Dây hụi không tồn tại hoặc đã mãn dây!');
+
+    // Tìm xem hồ sơ hụi viên đã có chưa
+    let prof = this.state.profiles.find(p => p.phone && this.normalizePhone(p.phone) === this.normalizePhone(account.phone));
+    if (!prof) {
+      prof = this.addMemberProfile({
+        fullName: account.fullName,
+        nickname: account.fullName.split(' ').pop(),
+        phone: account.phone,
+        address: account.address || '',
+        notes: 'Gia nhập qua Link chia sẻ dây hụi'
+      });
+    }
+
+    let gm = this.state.groupMembers.find(m => m.groupId === groupId && m.memberProfileId === prof.id);
+    if (!gm) {
+      gm = {
+        id: 'gm-' + Date.now(),
+        groupId,
+        memberProfileId: prof.id,
+        sharesCount: 1,
+        hotedCycles: [],
+        status: 'active',
+        joinDate: new Date().toISOString().split('T')[0],
+        notes: 'Gia nhập trực tuyến qua Link'
+      };
+      this.state.groupMembers.push(gm);
+      prof.activeHuiCount = (prof.activeHuiCount || 0) + 1;
+
+      // Gửi tin nhắn chào mừng vào phòng chat
+      this.sendGroupMessage(
+        groupId,
+        `👋 Chào mừng [${prof.fullName}] đã gia nhập nhóm dây hụi qua Link chia sẻ!`,
+        'system'
+      );
+
+      this.saveState();
+    }
+
+    return { group, profile: prof, groupMember: gm };
   }
 
   // --- 12. THUẬT TOÁN ĐỌC TIỀN TIẾNG VIỆT CHUẨN ---
