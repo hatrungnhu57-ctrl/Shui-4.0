@@ -1071,668 +1071,20 @@ Các bên cam kết thực hiện đúng thỏa thuận, không tự ý bỏ d�
 
 
 /**
- * DỮ LIỆU KHỞI TẠO DEMO (MOCK DATA)
- * Sổ Hụi - Đầy đủ các trường hợp hụi sống, hụi chết, trễ hạn, cảnh báo nợ, quay random
+ * DỮ LIỆU KHỞI TẠO HỆ THỐNG THỰC TẾ (CLEAN PRODUCTION STATE)
+ * Mọi dây hụi, thành viên và giao dịch sẽ do người dùng thực tế tự nhập.
  */
 
-const INITIAL_USERS = [
-  {
-    id: "u-owner",
-    fullName: "Nguyễn Thị Bảy (Cô Bảy)",
-    phone: "0918123456",
-    role: "owner",
-    avatar: "👩‍💼",
-    title: "Chủ Hụi Uy Tín - Chợ Vĩnh Kim"
-  },
-  {
-    id: "u-member",
-    fullName: "Trần Văn Ba (Anh Ba Khía)",
-    phone: "0909888999",
-    role: "member",
-    avatar: "👨‍🌾",
-    title: "Hụi Viên - Nông Trại Vườn Sầu Riêng"
-  },
-  {
-    id: "u-hybrid",
-    fullName: "Lê Thị Út Lành (Chị Út)",
-    phone: "0987654321",
-    role: "hybrid",
-    avatar: "🧕",
-    title: "Chủ Hụi kiêm Hụi Viên - Tiệm May Út Lành"
-  }
-];
-
-const INITIAL_PROFILES = [
-  {
-    id: "mp-1",
-    fullName: "Nguyễn Thị Bảy",
-    nickname: "Cô Bảy Chủ Thảo",
-    phone: "0918123456",
-    address: "Ấp Vĩnh Hòa, Vĩnh Kim, Châu Thành, Tiền Giang",
-    notes: "Chủ hụi thâm niên 15 năm, uy tín tuyệt đối tại khu chợ",
-    creditRating: 5,
-    activeHuiCount: 3,
-    completedHuiCount: 18,
-    latePaymentCount: 0,
-    hotedCount: 3,
-    riskNote: "",
-    isMerged: false,
-    createdAt: "2024-01-01"
-  },
-  {
-    id: "mp-2",
-    fullName: "Trần Văn Ba",
-    nickname: "Anh Ba Khía",
-    phone: "0909888999",
-    address: "Xã Tam Bình, Cai Lậy, Tiền Giang",
-    notes: "Chủ vựa sầu riêng, tài chính mạnh, luôn đóng tiền trước ngày khui",
-    creditRating: 5,
-    activeHuiCount: 2,
-    completedHuiCount: 8,
-    latePaymentCount: 0,
-    hotedCount: 1,
-    riskNote: "",
-    isMerged: false,
-    createdAt: "2024-02-10"
-  },
-  {
-    id: "mp-3",
-    fullName: "Lê Thị Tư",
-    nickname: "Chị Tư Cà Mau",
-    phone: "0939111222",
-    address: "Chợ Nổi Cái Răng, Cần Thơ",
-    notes: "Tiểu thương bán trái cây ghe hàng, tính tình xởi lởi",
-    creditRating: 4,
-    activeHuiCount: 2,
-    completedHuiCount: 5,
-    latePaymentCount: 1,
-    hotedCount: 1,
-    riskNote: "Từng trễ 1 ngày do ghe hàng bị kẹt phà, đã thanh toán đủ",
-    isMerged: false,
-    createdAt: "2024-03-15"
-  },
-  {
-    id: "mp-4",
-    fullName: "Phạm Văn Năm",
-    nickname: "Chú Năm Tạp Hóa",
-    phone: "0913444555",
-    address: "Ngã ba Chợ Giữa, Vĩnh Long",
-    notes: "Chủ tiệm bách hóa tổng hợp, tham gia hụi để tích lũy dưỡng già",
-    creditRating: 5,
-    activeHuiCount: 2,
-    completedHuiCount: 12,
-    latePaymentCount: 0,
-    hotedCount: 0,
-    riskNote: "",
-    isMerged: false,
-    createdAt: "2024-01-20"
-  },
-  {
-    id: "mp-5",
-    fullName: "Hoàng Thị Sáu",
-    nickname: "Chị Sáu Bến Tre",
-    phone: "0977666777",
-    address: "Mỏ Cày Nam, Bến Tre",
-    notes: "Kinh doanh kẹo dừa và dừa xiêm xuất khẩu",
-    creditRating: 4,
-    activeHuiCount: 2,
-    completedHuiCount: 6,
-    latePaymentCount: 0,
-    hotedCount: 1,
-    riskNote: "",
-    isMerged: false,
-    createdAt: "2024-04-01"
-  },
-  {
-    id: "mp-6",
-    fullName: "Trần Văn Tám",
-    nickname: "Bác Tám Chợ Gạo",
-    phone: "0945888777",
-    address: "Chợ Gạo, Tiền Giang",
-    notes: "Cựu giáo viên hưu trí, rất nghiêm túc và đúng giờ",
-    creditRating: 5,
-    activeHuiCount: 1,
-    completedHuiCount: 10,
-    latePaymentCount: 0,
-    hotedCount: 0,
-    riskNote: "",
-    isMerged: false,
-    createdAt: "2024-01-15"
-  },
-  {
-    id: "mp-7",
-    fullName: "Lê Thị Út Lành",
-    nickname: "Chị Út Lành",
-    phone: "0987654321",
-    address: "Đường Hùng Vương, Phường 2, TP. Mỹ Tho",
-    notes: "Chủ tiệm may áo dài Út Lành, chơi 2 phần ở dây 2 triệu",
-    creditRating: 5,
-    activeHuiCount: 2,
-    completedHuiCount: 7,
-    latePaymentCount: 0,
-    hotedCount: 1,
-    riskNote: "",
-    isMerged: false,
-    createdAt: "2024-02-01"
-  },
-  {
-    id: "mp-8",
-    fullName: "Đỗ Văn Mười",
-    nickname: "Anh Mười Cò Đất",
-    phone: "0969999000",
-    address: "Huyện Cai Lậy, Tiền Giang",
-    notes: "Môi giới nhà đất, thường đóng tiền sát giờ, hay xin khất",
-    creditRating: 2,
-    activeHuiCount: 1,
-    completedHuiCount: 2,
-    latePaymentCount: 3,
-    hotedCount: 1,
-    riskNote: "CẢNH BÁO: Từng trễ 3 kỳ ở dây trước, đang còn nợ 1.500.000đ tiền hụi chết kỳ 2 dây 5 triệu. Cần giám sát chặt chẽ!",
-    isMerged: false,
-    createdAt: "2024-05-12"
-  },
-  {
-    id: "mp-9",
-    fullName: "Võ Thị Hồng",
-    nickname: "Cô Hồng Cá Kiểng",
-    phone: "0902333444",
-    address: "TP. Cao Lãnh, Đồng Tháp",
-    notes: "Nuôi cá kiểng bán chợ nổi",
-    creditRating: 4,
-    activeHuiCount: 1,
-    completedHuiCount: 3,
-    latePaymentCount: 0,
-    hotedCount: 0,
-    riskNote: "",
-    isMerged: false,
-    createdAt: "2024-06-01"
-  },
-  {
-    id: "mp-10",
-    fullName: "Nguyễn Văn Đực",
-    nickname: "Chú Chín Vịt Cỏ",
-    phone: "0919222333",
-    address: "Huyện Tháp Mười, Đồng Tháp",
-    notes: "Chủ đàn vịt chạy đồng 5.000 con",
-    creditRating: 4,
-    activeHuiCount: 1,
-    completedHuiCount: 4,
-    latePaymentCount: 1,
-    hotedCount: 0,
-    riskNote: "Đóng tiền phụ thuộc vào lứa xuất chuồng, nhưng luôn tất toán đủ",
-    isMerged: false,
-    createdAt: "2024-06-15"
-  }
-];
-
-const INITIAL_GROUPS = [
-  {
-    id: "grp-1",
-    name: "Dây 2 Triệu Chợ Chiều Vĩnh Kim",
-    baseAmount: 2000000,
-    totalParts: 12,
-    periodType: "month",
-    startDate: "2026-06-15",
-    openDayRule: "Mùng 15 Tây hàng tháng",
-    drawMethod: "bidding", // Kêu hụi bỏ lãi
-    commissionRate: 50, // 50% mức 1 phần (1.000.000đ khi hốt)
-    status: "active",
-    agreementNotes: "Hụi viên nộp tiền trong vòng 24h sau khi khui. Người hốt chịu tiền thảo 1.000.000đ cho chủ hụi. Ai trễ hạn quá 3 ngày chịu phạt 50.000đ/ngày.",
-    createdBy: "mp-1",
-    createdAt: "2026-06-01"
-  },
-  {
-    id: "grp-2",
-    name: "Dây 5 Triệu Tương Trợ Miệt Vườn (Random)",
-    baseAmount: 5000000,
-    totalParts: 10,
-    periodType: "month",
-    startDate: "2026-07-01",
-    openDayRule: "Mùng 01 Tây hàng tháng",
-    drawMethod: "random", // Quay ngẫu nhiên
-    commissionRate: 0, // Hụi tương trợ không lấy tiền thảo
-    status: "active",
-    agreementNotes: "Dây hụi không lãi tương trợ quay số ngẫu nhiên hoàn toàn qua app Sổ Hụi trước sự chứng kiến của mọi người. Người trúng hốt trọn 50 triệu không mất lãi.",
-    createdBy: "mp-1",
-    createdAt: "2026-06-20"
-  },
-  {
-    id: "grp-3",
-    name: "Dây Tuần 500k Chị Em Tiệm May",
-    baseAmount: 500000,
-    totalParts: 15,
-    periodType: "week",
-    startDate: "2026-08-01",
-    openDayRule: "Chiều Thứ 7 hàng tuần (16:00)",
-    drawMethod: "secret_ballot", // Bỏ thăm kín
-    commissionRate: 50, // 250k tiền thảo
-    status: "active",
-    agreementNotes: "Hụi chị em bạn hữu khui chiều thứ 7, đóng bằng tiền mặt hoặc chuyển khoản MoMo/Vietcombank.",
-    createdBy: "mp-7", // Do Chị Út Lành làm chủ
-    createdAt: "2026-07-25"
-  }
-];
-
-const INITIAL_GROUP_MEMBERS = [
-  // Dây 1: "Dây 2 Triệu Chợ Chiều" (12 phần)
-  { id: "gm-1-1", groupId: "grp-1", memberProfileId: "mp-1", sharesCount: 1, hotedCycles: [1], status: "hoted", joinDate: "2026-06-01", notes: "Chủ hụi hưởng phần đầu (kỳ 1)" },
-  { id: "gm-1-2", groupId: "grp-1", memberProfileId: "mp-2", sharesCount: 1, hotedCycles: [2], status: "hoted", joinDate: "2026-06-01", notes: "Đã hốt kỳ 2 (thăm 350.000đ)" },
-  { id: "gm-1-3", groupId: "grp-1", memberProfileId: "mp-3", sharesCount: 1, hotedCycles: [3], status: "hoted", joinDate: "2026-06-01", notes: "Đã hốt kỳ 3 (thăm 300.000đ)" },
-  { id: "gm-1-4", groupId: "grp-1", memberProfileId: "mp-4", sharesCount: 1, hotedCycles: [], status: "active", joinDate: "2026-06-01", notes: "Hụi sống" },
-  { id: "gm-1-5", groupId: "grp-1", memberProfileId: "mp-5", sharesCount: 1, hotedCycles: [], status: "active", joinDate: "2026-06-01", notes: "Hụi sống" },
-  { id: "gm-1-6", groupId: "grp-1", memberProfileId: "mp-6", sharesCount: 1, hotedCycles: [], status: "active", joinDate: "2026-06-01", notes: "Hụi sống" },
-  { id: "gm-1-7", groupId: "grp-1", memberProfileId: "mp-7", sharesCount: 2, hotedCycles: [], status: "active", joinDate: "2026-06-01", notes: "Chơi 2 phần hụi sống" },
-  { id: "gm-1-8", groupId: "grp-1", memberProfileId: "mp-8", sharesCount: 1, hotedCycles: [], status: "in_debt", joinDate: "2026-06-01", notes: "Hụi sống nhưng hay chậm trễ" },
-  { id: "gm-1-9", groupId: "grp-1", memberProfileId: "mp-9", sharesCount: 1, hotedCycles: [], status: "active", joinDate: "2026-06-01", notes: "Hụi sống" },
-  { id: "gm-1-10", groupId: "grp-1", memberProfileId: "mp-10", sharesCount: 2, hotedCycles: [], status: "active", joinDate: "2026-06-01", notes: "Chơi 2 phần hụi sống" },
-
-  // Dây 2: "Dây 5 Triệu Random" (10 phần)
-  { id: "gm-2-1", groupId: "grp-2", memberProfileId: "mp-1", sharesCount: 1, hotedCycles: [1], status: "hoted", joinDate: "2026-06-20", notes: "Kỳ 1" },
-  { id: "gm-2-2", groupId: "grp-2", memberProfileId: "mp-2", sharesCount: 1, hotedCycles: [], status: "active", joinDate: "2026-06-20", notes: "Chưa hốt" },
-  { id: "gm-2-3", groupId: "grp-2", memberProfileId: "mp-4", sharesCount: 1, hotedCycles: [2], status: "hoted", joinDate: "2026-06-20", notes: "Đã trúng random kỳ 2" },
-  { id: "gm-2-4", groupId: "grp-2", memberProfileId: "mp-5", sharesCount: 1, hotedCycles: [], status: "active", joinDate: "2026-06-20", notes: "Chưa hốt" },
-  { id: "gm-2-5", groupId: "grp-2", memberProfileId: "mp-6", sharesCount: 1, hotedCycles: [], status: "active", joinDate: "2026-06-20", notes: "Chưa hốt" },
-  { id: "gm-2-6", groupId: "grp-2", memberProfileId: "mp-7", sharesCount: 1, hotedCycles: [], status: "active", joinDate: "2026-06-20", notes: "Chưa hốt" },
-  { id: "gm-2-7", groupId: "grp-2", memberProfileId: "mp-8", sharesCount: 1, hotedCycles: [], status: "in_debt", joinDate: "2026-06-20", notes: "Đang nợ kỳ 2 chưa đóng" },
-  { id: "gm-2-8", groupId: "grp-2", memberProfileId: "mp-9", sharesCount: 1, hotedCycles: [], status: "active", joinDate: "2026-06-20", notes: "Chưa hốt" },
-  { id: "gm-2-9", groupId: "grp-2", memberProfileId: "mp-10", sharesCount: 2, hotedCycles: [], status: "active", joinDate: "2026-06-20", notes: "Chơi 2 phần" }
-];
-
-const INITIAL_CYCLES = [
-  // Dây 1 - Kỳ 1: Khởi động (Chủ hụi hốt)
-  {
-    id: "cyc-1-1",
-    groupId: "grp-1",
-    cycleNumber: 1,
-    openDate: "2026-06-15",
-    winnerMemberProfileId: "mp-1",
-    winningBidAmount: 0,
-    totalCollected: 22000000,
-    totalExpected: 22000000,
-    potAmount: 22000000,
-    commissionAmount: 0,
-    status: "closed",
-    incidentNote: "Kỳ đầu chủ hụi hưởng theo tập quán.",
-    closedAt: "2026-06-16 10:00:00",
-    closedBy: "mp-1"
-  },
-  // Dây 1 - Kỳ 2: Anh Ba Khía hốt (Thăm 350k)
-  {
-    id: "cyc-1-2",
-    groupId: "grp-1",
-    cycleNumber: 2,
-    openDate: "2026-07-15",
-    winnerMemberProfileId: "mp-2",
-    winningBidAmount: 350000,
-    totalCollected: 18500000,
-    totalExpected: 18500000,
-    potAmount: 17500000,
-    commissionAmount: 1000000,
-    status: "closed",
-    incidentNote: "Anh Ba Khía kêu hụi trúng 350k, hụi sống nộp 1.650k, hụi chết nộp 2tr.",
-    closedAt: "2026-07-16 15:30:00",
-    closedBy: "mp-1"
-  },
-  // Dây 1 - Kỳ 3: Chị Tư Cà Mau hốt (Thăm 300k)
-  {
-    id: "cyc-1-3",
-    groupId: "grp-1",
-    cycleNumber: 3,
-    openDate: "2026-08-15",
-    winnerMemberProfileId: "mp-3",
-    winningBidAmount: 300000,
-    totalCollected: 19300000,
-    totalExpected: 19300000,
-    potAmount: 18300000,
-    commissionAmount: 1000000,
-    status: "closed",
-    incidentNote: "Đã thu đủ và giao tiền mặt đầy đủ cho Chị Tư.",
-    closedAt: "2026-08-16 11:20:00",
-    closedBy: "mp-1"
-  },
-  // Dây 1 - Kỳ 4: Kỳ hiện tại đang mở thu tiền (Mùng 15/09/2026 vừa khui xong)
-  {
-    id: "cyc-1-4",
-    groupId: "grp-1",
-    cycleNumber: 4,
-    openDate: "2026-09-15",
-    winnerMemberProfileId: "mp-5", // Chị Sáu Bến Tre trúng thăm 280k
-    winningBidAmount: 280000,
-    totalCollected: 14760000,
-    totalExpected: 19760000,
-    potAmount: 18760000,
-    commissionAmount: 1000000,
-    status: "open",
-    incidentNote: "Chị Sáu Bến Tre trúng hụi 280k. Hụi chết: mp-1, mp-2, mp-3 (2.000k/chân). Hụi sống: 1.720k/chân. Còn 2 người chưa nộp.",
-    closedAt: null,
-    closedBy: null
-  },
-
-  // Dây 2 - Kỳ 1: Random kỳ 1
-  {
-    id: "cyc-2-1",
-    groupId: "grp-2",
-    cycleNumber: 1,
-    openDate: "2026-07-01",
-    winnerMemberProfileId: "mp-1",
-    winningBidAmount: 0,
-    totalCollected: 45000000,
-    totalExpected: 45000000,
-    potAmount: 45000000,
-    commissionAmount: 0,
-    status: "closed",
-    incidentNote: "Dây tương trợ không lãi.",
-    closedAt: "2026-07-02 09:00:00",
-    closedBy: "mp-1"
-  },
-  // Dây 2 - Kỳ 2: Random kỳ 2 (Chú Năm Tạp Hóa trúng)
-  {
-    id: "cyc-2-2",
-    groupId: "grp-2",
-    cycleNumber: 2,
-    openDate: "2026-08-01",
-    winnerMemberProfileId: "mp-4",
-    winningBidAmount: 0,
-    totalCollected: 40000000,
-    totalExpected: 45000000,
-    potAmount: 45000000,
-    commissionAmount: 0,
-    status: "closed",
-    incidentNote: "Quay random trúng Chú Năm. Anh Mười (mp-8) chưa nộp 5tr, chủ hụi đã tạm ứng giao đủ cho Chú Năm.",
-    closedAt: "2026-08-03 14:00:00",
-    closedBy: "mp-1"
-  },
-  // Dây 2 - Kỳ 3: Chuẩn bị khui (Ngày 01/10/2026)
-  {
-    id: "cyc-2-3",
-    groupId: "grp-2",
-    cycleNumber: 3,
-    openDate: "2026-10-01",
-    winnerMemberProfileId: null,
-    winningBidAmount: 0,
-    totalCollected: 0,
-    totalExpected: 45000000,
-    potAmount: 45000000,
-    commissionAmount: 0,
-    status: "open",
-    incidentNote: "Sắp tới ngày khui random kỳ 3.",
-    closedAt: null,
-    closedBy: null
-  }
-];
-
-const INITIAL_PAYMENTS = [
-  // Các khoản đóng Kỳ 4 của Dây 1:
-  // Hụi chết: mp-1 (Chủ hụi tự trừ), mp-2 (Anh Ba Khía đã đóng CK 2tr), mp-3 (Chị Tư Cà Mau đã đóng tiền mặt 2tr)
-  {
-    id: "pay-1",
-    cycleId: "cyc-1-4",
-    groupId: "grp-1",
-    memberProfileId: "mp-1",
-    sharesCount: 1,
-    isDeadHui: true,
-    amountDue: 2000000,
-    amountPaid: 2000000,
-    paymentMethod: "cash",
-    status: "paid",
-    paidAt: "2026-09-15 10:00:00",
-    recordedBy: "Cô Bảy",
-    note: "Hụi chết kỳ 1 tự khấu trừ",
-    createdAt: "2026-09-15 10:00:00",
-    updatedAt: "2026-09-15 10:00:00"
-  },
-  {
-    id: "pay-2",
-    cycleId: "cyc-1-4",
-    groupId: "grp-1",
-    memberProfileId: "mp-2",
-    sharesCount: 1,
-    isDeadHui: true,
-    amountDue: 2000000,
-    amountPaid: 2000000,
-    paymentMethod: "transfer",
-    transactionRef: "VCB.20260915.99281",
-    status: "paid",
-    paidAt: "2026-09-15 14:20:00",
-    recordedBy: "Cô Bảy",
-    note: "Anh Ba Khía chuyển khoản Vietcombank",
-    createdAt: "2026-09-15 14:25:00",
-    updatedAt: "2026-09-15 14:25:00"
-  },
-  {
-    id: "pay-3",
-    cycleId: "cyc-1-4",
-    groupId: "grp-1",
-    memberProfileId: "mp-3",
-    sharesCount: 1,
-    isDeadHui: true,
-    amountDue: 2000000,
-    amountPaid: 2000000,
-    paymentMethod: "cash",
-    status: "paid",
-    paidAt: "2026-09-15 16:00:00",
-    recordedBy: "Cô Bảy",
-    note: "Chị Tư ghé nhà gửi tiền mặt",
-    createdAt: "2026-09-15 16:05:00",
-    updatedAt: "2026-09-15 16:05:00"
-  },
-  // Hụi sống (1.720k/phần): Chú Năm (mp-4) đã nộp, Chị Út Lành (mp-7 chơi 2 phần = 3.440k) đã nộp, Bác Tám (mp-6) đã nộp
-  {
-    id: "pay-4",
-    cycleId: "cyc-1-4",
-    groupId: "grp-1",
-    memberProfileId: "mp-4",
-    sharesCount: 1,
-    isDeadHui: false,
-    amountDue: 1720000,
-    amountPaid: 1720000,
-    paymentMethod: "transfer",
-    transactionRef: "MB.20260916.11029",
-    status: "paid",
-    paidAt: "2026-09-16 08:30:00",
-    recordedBy: "Cô Bảy",
-    note: "Chú Năm chuyển khoản MBBank",
-    createdAt: "2026-09-16 08:35:00",
-    updatedAt: "2026-09-16 08:35:00"
-  },
-  {
-    id: "pay-5",
-    cycleId: "cyc-1-4",
-    groupId: "grp-1",
-    memberProfileId: "mp-7",
-    sharesCount: 2,
-    isDeadHui: false,
-    amountDue: 3440000,
-    amountPaid: 3440000,
-    paymentMethod: "transfer",
-    transactionRef: "ACB.20260916.44812",
-    status: "paid",
-    paidAt: "2026-09-16 09:15:00",
-    recordedBy: "Cô Bảy",
-    note: "Chị Út Lành đóng đủ cho 2 chân",
-    createdAt: "2026-09-16 09:20:00",
-    updatedAt: "2026-09-16 09:20:00"
-  },
-  {
-    id: "pay-6",
-    cycleId: "cyc-1-4",
-    groupId: "grp-1",
-    memberProfileId: "mp-6",
-    sharesCount: 1,
-    isDeadHui: false,
-    amountDue: 1720000,
-    amountPaid: 1720000,
-    paymentMethod: "cash",
-    status: "paid",
-    paidAt: "2026-09-16 11:00:00",
-    recordedBy: "Cô Bảy",
-    note: "Bác Tám gửi tiền mặt tại sạp",
-    createdAt: "2026-09-16 11:05:00",
-    updatedAt: "2026-09-16 11:05:00"
-  },
-  {
-    id: "pay-7",
-    cycleId: "cyc-1-4",
-    groupId: "grp-1",
-    memberProfileId: "mp-9",
-    sharesCount: 1,
-    isDeadHui: false,
-    amountDue: 1720000,
-    amountPaid: 1720000,
-    paymentMethod: "transfer",
-    transactionRef: "VCB.20260916.77234",
-    status: "paid",
-    paidAt: "2026-09-16 15:45:00",
-    recordedBy: "Cô Bảy",
-    note: "Cô Hồng Cá Kiểng chuyển khoản",
-    createdAt: "2026-09-16 15:50:00",
-    updatedAt: "2026-09-16 15:50:00"
-  },
-  // CHƯA ĐÓNG / TRỄ HẠN:
-  // 1. Anh Mười (mp-8): 1 phần = 1.720.000đ (Chưa đóng - Trễ hạn)
-  {
-    id: "pay-8",
-    cycleId: "cyc-1-4",
-    groupId: "grp-1",
-    memberProfileId: "mp-8",
-    sharesCount: 1,
-    isDeadHui: false,
-    amountDue: 1720000,
-    amountPaid: 0,
-    paymentMethod: "cash",
-    status: "late",
-    paidAt: null,
-    recordedBy: "Cô Bảy",
-    note: "Đã gọi điện 2 lần, hứa chiều 17/09 đóng",
-    createdAt: "2026-09-15 10:00:00",
-    updatedAt: "2026-09-17 08:00:00"
-  },
-  // 2. Chú Chín Vịt Cỏ (mp-10): 2 phần = 3.440.000đ (Chưa đóng)
-  {
-    id: "pay-9",
-    cycleId: "cyc-1-4",
-    groupId: "grp-1",
-    memberProfileId: "mp-10",
-    sharesCount: 2,
-    isDeadHui: false,
-    amountDue: 3440000,
-    amountPaid: 0,
-    paymentMethod: "cash",
-    status: "unpaid",
-    paidAt: null,
-    recordedBy: "Cô Bảy",
-    note: "Đang lùa vịt ở Đồng Tháp, hẹn tối chuyển khoản",
-    createdAt: "2026-09-15 10:00:00",
-    updatedAt: "2026-09-15 10:00:00"
-  }
-];
-
-const INITIAL_RECEIPTS = [
-  {
-    id: "rec-1",
-    receiptNumber: "BN-202609-001",
-    paymentId: "pay-2",
-    payerName: "Trần Văn Ba (Anh Ba Khía)",
-    receiverName: "Nguyễn Thị Bảy (Cô Bảy)",
-    amount: 2000000,
-    amountInWords: "Hai triệu đồng chẵn",
-    huiName: "Dây 2 Triệu Chợ Chiều Vĩnh Kim",
-    cycleNumber: 4,
-    paymentMethod: "Chuyển khoản Vietcombank (Mã: VCB.20260915.99281)",
-    paymentDate: "2026-09-15 14:20:00",
-    signaturePlaceholder: true,
-    createdAt: "2026-09-15 14:25:00"
-  },
-  {
-    id: "rec-2",
-    receiptNumber: "BN-202609-002",
-    paymentId: "pay-5",
-    payerName: "Lê Thị Út Lành (Chị Út)",
-    receiverName: "Nguyễn Thị Bảy (Cô Bảy)",
-    amount: 3440000,
-    amountInWords: "Ba triệu bốn trăm bốn mươi ngàn đồng",
-    huiName: "Dây 2 Triệu Chợ Chiều Vĩnh Kim",
-    cycleNumber: 4,
-    paymentMethod: "Chuyển khoản ACB (Mã: ACB.20260916.44812)",
-    paymentDate: "2026-09-16 09:15:00",
-    signaturePlaceholder: true,
-    createdAt: "2026-09-16 09:20:00"
-  }
-];
-
-const INITIAL_RANDOM_DRAWS = [
-  {
-    id: "rd-1",
-    groupId: "grp-2",
-    cycleNumber: 2,
-    eligibleCandidates: ["mp-2", "mp-4", "mp-5", "mp-6", "mp-7", "mp-9", "mp-10"],
-    excludedCandidates: ["mp-1 (Đã hốt)", "mp-8 (Đang nợ)"],
-    winnerProfileId: "mp-4",
-    winnerName: "Phạm Văn Năm (Chú Năm Tạp Hóa)",
-    drawTimestamp: "2026-08-01 10:30:15",
-    isRedrawn: false,
-    redrawReason: "",
-    drawnBy: "Cô Bảy Chủ Thảo"
-  }
-];
-
-const INITIAL_ACTIVITY_LOGS = [
-  {
-    id: "log-1",
-    action: "CREATE_HUI",
-    actorName: "Cô Bảy",
-    targetType: "HuiGroup",
-    targetId: "grp-1",
-    description: "Khởi tạo dây hụi 'Dây 2 Triệu Chợ Chiều Vĩnh Kim' (12 phần, kỳ mở mùng 15).",
-    timestamp: "2026-06-01 08:00:00"
-  },
-  {
-    id: "log-2",
-    action: "OPEN_CYCLE",
-    actorName: "Cô Bảy",
-    targetType: "HuiCycle",
-    targetId: "cyc-1-4",
-    description: "Khui hụi Kỳ 4 Dây 2 Triệu. Người hốt: Chị Sáu Bến Tre với mức thăm 280.000đ.",
-    timestamp: "2026-09-15 09:30:00"
-  },
-  {
-    id: "log-3",
-    action: "RECORD_PAYMENT",
-    actorName: "Cô Bảy",
-    targetType: "Payment",
-    targetId: "pay-2",
-    description: "Ghi nhận đóng tiền 2.000.000đ (Chuyển khoản VCB) từ Anh Ba Khía cho Kỳ 4.",
-    timestamp: "2026-09-15 14:25:00"
-  },
-  {
-    id: "log-4",
-    action: "RECORD_PAYMENT",
-    actorName: "Cô Bảy",
-    targetType: "Payment",
-    targetId: "pay-5",
-    description: "Ghi nhận đóng tiền 3.440.000đ (2 chân hụi sống) từ Chị Út Lành cho Kỳ 4.",
-    timestamp: "2026-09-16 09:20:00"
-  }
-];
-
-const INITIAL_NOTIFICATIONS = [
-  {
-    id: "notif-1",
-    title: "Nhắc nhở nợ hụi",
-    message: "Anh Mười Cò Đất đang trễ hạn đóng Kỳ 4 Dây 2 Triệu (1.720.000đ) và Kỳ 2 Dây 5 Triệu.",
-    type: "warning",
-    read: false,
-    createdAt: "2026-09-17 07:00:00"
-  },
-  {
-    id: "notif-2",
-    title: "Khui hụi thành công",
-    message: "Kỳ 4 Dây 2 Triệu Chợ Chiều đã khui. Chị Sáu Bến Tre trúng thăm 280k.",
-    type: "success",
-    read: true,
-    createdAt: "2026-09-15 09:35:00"
-  }
-];
+const INITIAL_USERS = [];
+const INITIAL_PROFILES = [];
+const INITIAL_GROUPS = [];
+const INITIAL_GROUP_MEMBERS = [];
+const INITIAL_CYCLES = [];
+const INITIAL_PAYMENTS = [];
+const INITIAL_RECEIPTS = [];
+const INITIAL_RANDOM_DRAWS = [];
+const INITIAL_ACTIVITY_LOGS = [];
+const INITIAL_NOTIFICATIONS = [];
 
 
 /**
@@ -2478,72 +1830,19 @@ class SoHuiStore {
 
     // Nạp phiên đăng nhập và dữ liệu của tài khoản hiện tại
     this.currentAccount = this.loadSession();
-    this.state = this.loadAccountData(this.currentAccount.id);
+    this.state = this.currentAccount ? this.loadAccountData(this.currentAccount.id) : this.createEmptyState();
   }
 
   // --- 1. QUẢN LÝ TÀI KHOẢN & PHIÊN ĐĂNG NHẬP (AUTH & SESSIONS) ---
   initAccounts() {
     try {
       const savedAccounts = localStorage.getItem(this.accountsStorageKey);
-      if (!savedAccounts) {
-        // Tạo sẵn tài khoản mẫu mặc định
-        const defaultAccounts = [
-          {
-            id: 'acc-demo-cobay',
-            fullName: 'Cô Bảy (Chủ Hụi Mẫu)',
-            phone: '0918123456',
-            email: 'cobay@sohui.vn',
-            password: '123',
-            role: 'owner',
-            shopName: 'Tiệm Hụi Cô Bảy - Chợ Trà Vinh',
-            address: 'Khóm 1, Phường 2, TP. Trà Vinh',
-            bankCode: 'VCB',
-            bankName: 'Vietcombank',
-            accountNumber: '0741000123456',
-            accountHolder: 'NGUYEN THI BAY',
-            pinCode: '',
-            isDemo: true,
-            createdAt: '2026-01-01'
-          },
-          {
-            id: 'acc-demo-bakhia',
-            fullName: 'Anh Ba Khía (Hụi Viên Mẫu)',
-            phone: '0903987654',
-            email: 'bakhia@sohui.vn',
-            password: '123',
-            role: 'member',
-            shopName: '',
-            address: 'Xã Long Đức, TP. Trà Vinh',
-            bankCode: 'MB',
-            bankName: 'MBBank',
-            accountNumber: '88880903987654',
-            accountHolder: 'TRAN VAN KHIA',
-            pinCode: '',
-            isDemo: true,
-            createdAt: '2026-01-01'
-          },
-          {
-            id: 'acc-demo-utlanh',
-            fullName: 'Chị Út Lành (Chủ & Hụi Viên Mẫu)',
-            phone: '0988654321',
-            email: 'utlanh@sohui.vn',
-            password: '123',
-            role: 'hybrid',
-            shopName: 'Tạp hóa Út Lành',
-            address: 'Chợ Càng Long, Trà Vinh',
-            bankCode: 'TCB',
-            bankName: 'Techcombank',
-            accountNumber: '19034567890123',
-            accountHolder: 'LE THI UT LANH',
-            pinCode: '',
-            isDemo: true,
-            createdAt: '2026-01-01'
-          }
-        ];
-        localStorage.setItem(this.accountsStorageKey, JSON.stringify(defaultAccounts));
-
-        // Khởi tạo dữ liệu mẫu cho tài khoản demo
-        this.saveAccountData('acc-demo-cobay', this.getDefaultDemoData());
+      if (savedAccounts) {
+        // Tự động dọn dẹp các tài khoản demo cũ nếu có
+        const accounts = JSON.parse(savedAccounts).filter(a => !a.isDemo && !a.id?.startsWith('acc-demo-'));
+        localStorage.setItem(this.accountsStorageKey, JSON.stringify(accounts));
+      } else {
+        localStorage.setItem(this.accountsStorageKey, JSON.stringify([]));
       }
     } catch (e) {
       console.warn('Lỗi khởi tạo tài khoản:', e);
@@ -2553,14 +1852,16 @@ class SoHuiStore {
   getAccounts() {
     try {
       const saved = localStorage.getItem(this.accountsStorageKey);
-      return saved ? JSON.parse(saved) : [];
+      const list = saved ? JSON.parse(saved) : [];
+      return list.filter(a => !a.isDemo && !a.id?.startsWith('acc-demo-'));
     } catch (e) {
       return [];
     }
   }
 
   saveAccounts(accounts) {
-    localStorage.setItem(this.accountsStorageKey, JSON.stringify(accounts));
+    const cleanAccounts = (accounts || []).filter(a => !a.isDemo && !a.id?.startsWith('acc-demo-'));
+    localStorage.setItem(this.accountsStorageKey, JSON.stringify(cleanAccounts));
   }
 
   loadSession() {
@@ -2571,18 +1872,13 @@ class SoHuiStore {
         const found = accounts.find(a => a.id === savedSessionId);
         if (found) return found;
       }
-      // Nếu chưa có session, mặc định lấy tài khoản demo Cô Bảy
-      const defaultAcc = accounts[0] || {
-        id: 'acc-guest',
-        fullName: 'Chủ Hụi',
-        phone: '0900000000',
-        role: 'owner',
-        shopName: 'Sổ Hụi Của Tôi'
-      };
-      localStorage.setItem(this.sessionStorageKey, defaultAcc.id);
-      return defaultAcc;
+      if (accounts.length > 0) {
+        localStorage.setItem(this.sessionStorageKey, accounts[0].id);
+        return accounts[0];
+      }
+      return null;
     } catch (e) {
-      return { id: 'acc-guest', fullName: 'Chủ Hụi', role: 'owner' };
+      return null;
     }
   }
 
@@ -2591,7 +1887,27 @@ class SoHuiStore {
     return `SO_HUI_DATA_${accountId}`;
   }
 
+  createEmptyState() {
+    return {
+      users: [],
+      currentUser: null,
+      currentRole: 'owner',
+      profiles: [],
+      groups: [],
+      groupMembers: [],
+      cycles: [],
+      payments: [],
+      receipts: [],
+      randomDraws: [],
+      messages: [],
+      ballots: [],
+      logs: [],
+      notifications: []
+    };
+  }
+
   loadAccountData(accountId) {
+    if (!accountId) return this.createEmptyState();
     try {
       const key = this.getAccountStorageKey(accountId);
       const saved = localStorage.getItem(key);
@@ -2602,40 +1918,8 @@ class SoHuiStore {
       console.warn('Lỗi đọc dữ liệu tài khoản:', e);
     }
 
-    // Nếu là tài khoản demo, nạp dữ liệu mẫu
-    if (accountId === 'acc-demo-cobay' || accountId === 'acc-demo-bakhia' || accountId === 'acc-demo-utlanh') {
-      const demoData = this.getDefaultDemoData();
-      this.saveAccountData(accountId, demoData);
-      return demoData;
-    }
-
     // Tài khoản thật mới: Khởi tạo database sạch 100%
-    const freshData = {
-      users: [this.currentAccount],
-      currentUser: this.currentAccount,
-      currentRole: this.currentAccount.role || 'owner',
-      profiles: [],
-      groups: [],
-      groupMembers: [],
-      cycles: [],
-      payments: [],
-      receipts: [],
-      randomDraws: [],
-      messages: [],
-      ballots: [],
-      logs: [
-        {
-          id: 'log-init-' + Date.now(),
-          action: 'INIT_ACCOUNT',
-          actorName: this.currentAccount.fullName,
-          targetType: 'Account',
-          targetId: this.currentAccount.id,
-          description: `Khởi tạo sổ hụi thực tế cho ${this.currentAccount.fullName}`,
-          timestamp: new Date().toISOString().replace('T', ' ').substr(0, 19)
-        }
-      ],
-      notifications: []
-    };
+    const freshData = this.createFreshLedgerData(this.currentAccount || { id: accountId, fullName: 'Chủ Hụi', role: 'owner' });
     this.saveAccountData(accountId, freshData);
     return freshData;
   }
@@ -2885,12 +2169,10 @@ class SoHuiStore {
   }
 
   logout() {
-    // Chuyển về màn hình đăng nhập hoặc tài khoản demo
-    const accounts = this.getAccounts();
-    const demoAcc = accounts.find(a => a.isDemo) || accounts[0];
-    if (demoAcc) {
-      this.loginWithAccount(demoAcc);
-    }
+    localStorage.removeItem(this.sessionStorageKey);
+    this.currentAccount = null;
+    this.state = this.createEmptyState();
+    this.notifyListeners();
   }
 
   updateCurrentAccount(data) {
@@ -4177,7 +3459,7 @@ function renderAuthView(container, initialTab = 'login') {
                     <span style="font-size: 18px;">${acc.role === 'owner' ? '👩‍💼' : (acc.role === 'member' ? '👨‍🌾' : '🧕')}</span>
                     <div>
                       <div style="font-weight: 700; font-size: 13.5px; color: var(--text-main);">${escapeHtml(acc.fullName)}</div>
-                      <div style="font-size: 11.5px; color: var(--text-muted);">SĐT: ${escapeHtml(acc.phone)} ${acc.isDemo ? '• <span style="color:#b45309;">(Dữ liệu mẫu)</span>' : '• <span style="color:#15803d; font-weight:600;">(Sổ thật)</span>'}</div>
+                      <div style="font-size: 11.5px; color: var(--text-muted);">SĐT: ${escapeHtml(acc.phone)}</div>
                     </div>
                   </div>
                   <button class="btn btn-sm btn-outline" style="font-size: 11px; padding: 4px 8px;">Vào sổ ➔</button>
@@ -4218,7 +3500,7 @@ function renderAuthView(container, initialTab = 'login') {
           <div class="form-group">
             <label class="form-label">Vai trò chính của bạn:</label>
             <select id="reg-role" class="form-control form-select">
-              <option value="owner">Chủ Hụi (Tôi tạo dây, khui và gom tiền hụi)</option>
+              <option value="owner">Chủ H���i (Tôi tạo dây, khui và gom tiền hụi)</option>
               <option value="hybrid">Vừa làm Chủ vừa chơi Hụi</option>
               <option value="member">Hụi viên (Tôi chỉ tham gia đóng hụi)</option>
             </select>
@@ -4249,13 +3531,6 @@ function renderAuthView(container, initialTab = 'login') {
               <label class="form-label" style="font-size: 12px;">Số tài khoản ngân hàng:</label>
               <input type="text" id="reg-bank-acc" class="form-control" placeholder="Nhập số tài khoản..." style="font-size: 13px;" />
             </div>
-          </div>
-
-          <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px;">
-            <input type="checkbox" id="reg-seed-demo" style="width: 18px; height: 18px;" />
-            <label for="reg-seed-demo" style="cursor: pointer; color: var(--text-main);">
-              Nạp sẵn một số dây hụi mẫu để tôi tập sử dụng trước
-            </label>
           </div>
 
           <button class="btn btn-primary btn-block" id="btn-submit-register" style="margin-top: 10px; padding: 12px; font-size: 15px;">
@@ -4516,7 +3791,6 @@ function renderAuthView(container, initialTab = 'login') {
     const address = document.getElementById('reg-address').value.trim();
     const bankCode = document.getElementById('reg-bank-code').value;
     const accountNumber = document.getElementById('reg-bank-acc').value.trim();
-    const seedDemoData = document.getElementById('reg-seed-demo').checked;
 
     if (!fullName) {
       showToast('Vui lòng nhập họ và tên của bạn!', 'warning');
@@ -4542,8 +3816,7 @@ function renderAuthView(container, initialTab = 'login') {
       bankCode,
       bankName: selectedBank ? selectedBank.name : bankCode,
       accountNumber,
-      accountHolder: fullName,
-      seedDemoData
+      accountHolder: fullName
     };
 
     try {
@@ -4753,12 +4026,11 @@ function renderSettingsView(container) {
               <h3 style="font-size: 16px; font-weight: 800; color: var(--text-main);">${escapeHtml(acc.fullName)}</h3>
               <div style="font-size: 12px; color: var(--text-muted);">
                 📞 ${escapeHtml(acc.phone)} • ${acc.role === 'owner' ? 'Chủ Hụi' : (acc.role === 'member' ? 'Hụi Viên' : 'Chủ & Hụi Viên')}
-                ${acc.isDemo ? '<span class="badge badge-warning" style="margin-left:4px;">Dữ liệu mẫu</span>' : '<span class="badge badge-success" style="margin-left:4px;">Sổ thực tế</span>'}
               </div>
             </div>
           </div>
-          <button class="btn btn-sm btn-outline" id="btn-switch-or-logout" title="Đăng xuất / Đổi tài khoản">
-            🚪 Đổi TK
+          <button class="btn btn-sm btn-outline" id="btn-switch-or-logout" title="Đăng xuất khỏi tài khoản">
+            🚪 Đăng Xuất
           </button>
         </div>
         <button class="btn btn-sm btn-outline" id="btn-open-admin-panel" style="background: #faf5ff; border-color: #c084fc; color: #7c3aed; font-weight: 700; margin-top: 10px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px;">
@@ -4986,19 +4258,16 @@ function renderSettingsView(container) {
       <div class="card" style="border-color: #fecaca; background: #fffaf0;">
         <div class="card-header">
           <div class="card-title" style="color: #991b1b;">
-            ⚠️ Quản Lý Trạng Thái Dữ Liệu
+            ⚠️ Đặt Lại Dữ Liệu Sổ
           </div>
         </div>
         <div style="font-size: 12.5px; color: #78350f;">
-          Bạn có thể xóa toàn bộ dữ liệu mẫu để bắt đầu tạo sổ hụi thực tế sạch sẽ, hoặc nạp lại dữ liệu mẫu để hướng dẫn người khác.
+          Bạn có thể xóa toàn bộ dây hụi và lịch sử nợ trong tài khoản này để bắt đầu ghi chép lại từ đầu.
         </div>
 
-        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px;">
+        <div style="margin-top: 6px;">
           <button class="btn btn-danger btn-sm" id="btn-clear-real-data">
-            🧹 Xóa Hết Dữ Liệu (Bắt đầu Sổ Thật)
-          </button>
-          <button class="btn btn-outline btn-sm" id="btn-load-demo-sample">
-            🔄 Nạp Lại Dữ Liệu Mẫu
+            🧹 Xóa Hết Dữ Liệu Sổ Này (Về Trống)
           </button>
         </div>
       </div>
@@ -5186,24 +4455,17 @@ function renderSettingsView(container) {
 
   // Xóa sạch dữ liệu bắt đầu sổ thật
   document.getElementById('btn-clear-real-data')?.addEventListener('click', () => {
-    if (confirm('CẢNH BÁO: Thao tác này sẽ xóa sạch toàn bộ dây hụi và lịch sử đóng tiền của tài khoản này để bạn tạo sổ thật. Bạn có chắc chắn muốn tiếp tục?')) {
+    if (confirm('CẢNH BÁO: Thao tác này sẽ xóa sạch toàn bộ dây hụi và lịch sử đóng tiền của tài khoản này. Bạn có chắc chắn muốn tiếp tục?')) {
       store.clearCurrentAccountData();
-      showToast('Đã làm sạch sổ! Bạn có thể bắt đầu tạo dây hụi thật.', 'success');
+      showToast('Đã đặt lại dữ liệu sổ về trạng thái ban đầu!', 'success');
       renderSettingsView(container);
     }
   });
 
-  // Nạp lại dữ liệu mẫu
-  document.getElementById('btn-load-demo-sample')?.addEventListener('click', () => {
-    if (confirm('Bạn có muốn nạp lại dữ liệu hụi mẫu để tập sử dụng không?')) {
-      store.resetToDemoData();
-      showToast('Đã nạp lại dữ liệu mẫu thành công!', 'success');
-      renderSettingsView(container);
-    }
-  });
-
-  // Đổi tài khoản / Đăng xuất
+  // Đăng xuất
   document.getElementById('btn-switch-or-logout')?.addEventListener('click', () => {
+    store.logout();
+    showToast('Đã đăng xuất tài khoản!', 'info');
     window.location.hash = '#auth';
   });
 
@@ -8112,8 +7374,8 @@ function renderLogsView(container) {
 
 function renderAdminView(container) {
   const accounts = store.getAccounts();
-  const realAccounts = accounts.filter(a => !a.isDemo);
-  const demoAccounts = accounts.filter(a => a.isDemo);
+  const owners = accounts.filter(a => a.role === 'owner' || a.role === 'hybrid');
+  const members = accounts.filter(a => a.role === 'member');
 
   container.innerHTML = `
     <div style="display: flex; flex-direction: column; gap: 16px;">
@@ -8126,7 +7388,7 @@ function renderAdminView(container) {
               <h2 style="font-size: 18px; font-weight: 800; color: #581c87;">Trung Tâm Quản Trị Tài Khoản</h2>
             </div>
             <div style="font-size: 12.5px; color: #6b21a8; margin-top: 2px;">
-              Quản lý danh sách người dùng, hỗ trợ cấp lại mật khẩu và giám sát hệ thống
+              Quản lý danh sách người dùng, hỗ trợ cấp lại mật khẩu và cấu hình cổng SMS
             </div>
           </div>
           <button class="btn btn-sm btn-outline" id="btn-admin-back" style="font-size: 12px;">
@@ -8142,12 +7404,12 @@ function renderAdminView(container) {
           <div style="font-size: 20px; font-weight: 800; color: var(--primary); margin-top: 2px;">${accounts.length}</div>
         </div>
         <div class="card" style="text-align: center; padding: 12px;">
-          <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">Tài Khoản Thật</div>
-          <div style="font-size: 20px; font-weight: 800; color: #0284c7; margin-top: 2px;">${realAccounts.length}</div>
+          <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">Chủ Hụi</div>
+          <div style="font-size: 20px; font-weight: 800; color: #0284c7; margin-top: 2px;">${owners.length}</div>
         </div>
         <div class="card" style="text-align: center; padding: 12px;">
-          <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">Tài Khoản Demo</div>
-          <div style="font-size: 20px; font-weight: 800; color: #b45309; margin-top: 2px;">${demoAccounts.length}</div>
+          <div style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">Hụi Viên</div>
+          <div style="font-size: 20px; font-weight: 800; color: #16a34a; margin-top: 2px;">${members.length}</div>
         </div>
       </div>
 
@@ -8266,7 +7528,7 @@ function renderAdminView(container) {
             <div>Tiệm: <strong>${escapeHtml(acc.shopName) || 'Không có'}</strong></div>
             <div>Ngân hàng: <strong>${escapeHtml(acc.bankCode || 'VCB')} - ${escapeHtml(acc.accountNumber) || 'Chưa cấu hình'}</strong></div>
             <div>Tạo ngày: ${escapeHtml(acc.createdAt || 'N/A')}</div>
-            <div>Trạng thái: ${acc.isDemo ? '<span style="color:#b45309; font-weight:700;">Dữ liệu mẫu</span>' : '<span style="color:#15803d; font-weight:700;">Tài khoản thật</span>'}</div>
+            <div>Trạng thái: <span style="color:#15803d; font-weight:700;">🟢 Đang hoạt động</span></div>
           </div>
 
           <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border-color);">
@@ -8276,11 +7538,9 @@ function renderAdminView(container) {
             <button class="btn btn-sm btn-primary btn-admin-switch-to-user" data-phone="${escapeHtml(acc.phone)}" data-pass="${escapeHtml(acc.password)}">
               🚀 Vào xem sổ
             </button>
-            ${!acc.isDemo ? `
-              <button class="btn btn-sm btn-outline btn-admin-delete-user" data-id="${escapeHtml(acc.id)}" data-name="${escapeHtml(acc.fullName)}" style="color: var(--accent); border-color: #fecaca;">
-                🗑️ Xóa
-              </button>
-            ` : ''}
+            <button class="btn btn-sm btn-outline btn-admin-delete-user" data-id="${escapeHtml(acc.id)}" data-name="${escapeHtml(acc.fullName)}" style="color: var(--accent); border-color: #fecaca;">
+              🗑️ Xóa
+            </button>
           </div>
         </div>
       `;
@@ -9938,8 +9198,11 @@ class SoHuiApp {
 
     this.renderLayout();
 
-    if (!window.location.hash) {
-      window.location.hash = '#select-role';
+    if (!store.currentAccount) {
+      window.location.hash = '#auth';
+      this.handleRoute();
+    } else if (!window.location.hash || window.location.hash === '#select-role') {
+      window.location.hash = '#dashboard';
     } else {
       this.handleRoute();
     }
@@ -10120,7 +9383,12 @@ class SoHuiApp {
     if (!headerRight) return;
 
     const acc = store.currentAccount;
-    const role = store.state.currentRole;
+    if (!acc) {
+      headerRight.innerHTML = '';
+      return;
+    }
+
+    const role = store.state?.currentRole || acc.role || 'owner';
     let roleText = 'Chủ Hụi';
     let roleClass = 'owner';
     let roleIcon = '👩‍💼';
@@ -10151,7 +9419,7 @@ class SoHuiApp {
       </div>
       <div class="role-tag ${roleClass}" id="btn-change-role" title="Bấm để đổi vai trò">
         <span>${roleIcon}</span>
-        <span>${escapeHtml(acc.fullName.split(' ')[0])} (${roleText})</span>
+        <span>${escapeHtml((acc.fullName || 'Tài khoản').split(' ')[0])} (${roleText})</span>
         <span style="font-size: 10px; opacity: 0.7;">▼</span>
       </div>
       <button class="btn btn-sm btn-outline btn-circle" id="btn-goto-settings-header" title="Cài đặt & Sao lưu">
@@ -10173,12 +9441,21 @@ class SoHuiApp {
   }
 
   handleRoute() {
-    const hash = window.location.hash || '#select-role';
     const mainContent = document.getElementById('main-content');
     const navBar = document.getElementById('main-nav');
     const header = document.getElementById('main-header');
 
     if (!mainContent) return;
+
+    let hash = window.location.hash || (store.currentAccount ? '#dashboard' : '#auth');
+
+    // Nếu chưa đăng nhập, bắt buộc chuyển về màn hình đăng nhập / đăng ký
+    if (!store.currentAccount) {
+      if (hash !== '#auth' && hash !== '#login' && hash !== '#register') {
+        window.location.hash = '#auth';
+        return;
+      }
+    }
 
     // Cập nhật Nav
     this.appContainer.querySelectorAll('.nav-item').forEach(item => {
