@@ -1,6 +1,52 @@
 /**
- * CÁC HÀM TIỆN ÍCH DÙNG CHUNG (UI UTILS)
+ * CÁC HÀM TIỆN ÍCH DÙNG CHUNG (UI UTILS & VIETQR & BACKUP & SECURITY)
  */
+
+// Danh sách ngân hàng Việt Nam hỗ trợ chuẩn VietQR NAPAS247
+export const VIETNAMESE_BANKS = [
+  { code: 'VCB', name: 'Vietcombank (Ngoại Thương)', bin: '970436', shortName: 'Vietcombank' },
+  { code: 'MB', name: 'MBBank (Quân Đội)', bin: '970422', shortName: 'MBBank' },
+  { code: 'TCB', name: 'Techcombank (Kỹ Thương)', bin: '970407', shortName: 'Techcombank' },
+  { code: 'BIDV', name: 'BIDV (Đầu Tư & Phát Triển)', bin: '970418', shortName: 'BIDV' },
+  { code: 'CTG', name: 'VietinBank (Công Thương)', bin: '970415', shortName: 'VietinBank' },
+  { code: 'ACB', name: 'ACB (Á Châu)', bin: '970416', shortName: 'ACB' },
+  { code: 'VPB', name: 'VPBank (Việt Nam Thịnh Vượng)', bin: '970432', shortName: 'VPBank' },
+  { code: 'TPB', name: 'TPBank (Tiên Phong)', bin: '970423', shortName: 'TPBank' },
+  { code: 'STB', name: 'Sacombank (Sài Gòn Thương Tín)', bin: '970403', shortName: 'Sacombank' },
+  { code: 'HDB', name: 'HDBank (Phát Triển TP.HCM)', bin: '970437', shortName: 'HDBank' },
+  { code: 'VIB', name: 'VIB (Quốc Tế)', bin: '970441', shortName: 'VIB' },
+  { code: 'SHB', name: 'SHB (Sài Gòn - Hà Nội)', bin: '970443', shortName: 'SHB' },
+  { code: 'MSB', name: 'MSB (Hàng Hải)', bin: '970426', shortName: 'MSB' },
+  { code: 'OCB', name: 'OCB (Phương Đông)', bin: '970448', shortName: 'OCB' },
+  { code: 'LPB', name: 'LPBank (Lộc Phát Việt Nam)', bin: '970449', shortName: 'LPBank' },
+  { code: 'SEAB', name: 'SeABank (Đông Nam Á)', bin: '970440', shortName: 'SeABank' },
+  { code: 'VAB', name: 'VietABank (Việt Á)', bin: '970427', shortName: 'VietABank' },
+  { code: 'NCB', name: 'NCB (Quốc Dân)', bin: '970419', shortName: 'NCB' },
+  { code: 'BAB', name: 'BacABank (Bắc Á)', bin: '970409', shortName: 'BacABank' },
+  { code: 'BVB', name: 'BaoVietBank (Bảo Việt)', bin: '970438', shortName: 'BaoVietBank' },
+  { code: 'SGB', name: 'SaigonBank (Sài Gòn Công Thương)', bin: '970400', shortName: 'SaigonBank' },
+  { code: 'PVC', name: 'PVcomBank (Đại Chúng)', bin: '970412', shortName: 'PVcomBank' },
+  { code: 'NAB', name: 'NamABank (Nam Á)', bin: '970428', shortName: 'NamABank' },
+  { code: 'KLB', name: 'KienLongBank (Kiên Long)', bin: '970452', shortName: 'KienLongBank' },
+  { code: 'VBB', name: 'VietBank (Việt Nam Thương Tín)', bin: '970433', shortName: 'VietBank' },
+  { code: 'ABB', name: 'ABBANK (An Bình)', bin: '970425', shortName: 'ABBANK' },
+  { code: 'VBA', name: 'Agribank (Nông Nghiệp)', bin: '970405', shortName: 'Agribank' },
+  { code: 'CAKE', name: 'CAKE by VPBank', bin: '546034', shortName: 'CAKE' },
+  { code: 'TIMO', name: 'Timo by BVBank', bin: '963388', shortName: 'Timo' }
+];
+
+/**
+ * Xử lý phòng chống Cross-Site Scripting (XSS) cho chuỗi người dùng nhập
+ */
+export function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
 export function formatMoney(amount) {
   if (!amount && amount !== 0) return '0 đ';
@@ -10,7 +56,7 @@ export function formatMoney(amount) {
 export function formatDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
+  if (isNaN(d.getTime())) return escapeHtml(dateStr);
   const day = d.getDate().toString().padStart(2, '0');
   const month = (d.getMonth() + 1).toString().padStart(2, '0');
   const year = d.getFullYear();
@@ -20,7 +66,7 @@ export function formatDate(dateStr) {
 export function formatDateTime(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
+  if (isNaN(d.getTime())) return escapeHtml(dateStr);
   const day = d.getDate().toString().padStart(2, '0');
   const month = (d.getMonth() + 1).toString().padStart(2, '0');
   const year = d.getFullYear();
@@ -47,7 +93,7 @@ export function showToast(message, type = 'info', duration = 3000) {
 
   toast.innerHTML = `
     <span style="font-size:16px;">${icon}</span>
-    <span style="flex:1;">${message}</span>
+    <span style="flex:1;">${escapeHtml(message)}</span>
   `;
 
   container.appendChild(toast);
@@ -74,7 +120,7 @@ export function getPeriodLabel(type) {
     case 'week': return 'Hàng tuần';
     case 'half_month': return 'Nửa tháng (15 ngày)';
     case 'month': return 'Hàng tháng';
-    default: return type;
+    default: return escapeHtml(type);
   }
 }
 
@@ -83,14 +129,36 @@ export function getDrawMethodLabel(method) {
     case 'bidding': return '🏷️ Kêu hụi / Bỏ lãi';
     case 'secret_ballot': return '🗳️ Bỏ thăm kín';
     case 'random': return '🎲 Quay Random ngẫu nhiên';
-    default: return method;
+    default: return escapeHtml(method);
   }
 }
 
+/**
+ * Sinh link ảnh mã VietQR chuẩn ngân hàng quốc gia
+ */
+export function generateVietQRUrl(bankCode, accountNumber, accountHolder, amount = 0, memo = '') {
+  if (!bankCode || !accountNumber) return '';
+  const cleanBank = encodeURIComponent(bankCode.trim());
+  const cleanAcc = encodeURIComponent(accountNumber.trim().replace(/\s/g, ''));
+  const cleanAmount = Math.max(0, Math.round(Number(amount) || 0));
+  const encodedMemo = encodeURIComponent(memo.trim());
+  const encodedName = encodeURIComponent(accountHolder ? accountHolder.trim().toUpperCase() : '');
+
+  return `https://img.vietqr.io/image/${cleanBank}-${cleanAcc}-compact2.png?amount=${cleanAmount}&addInfo=${encodedMemo}&accountName=${encodedName}`;
+}
+
+/**
+ * Xuất file CSV an toàn, phòng chống CSV Injection (Formula Injection)
+ */
 export function exportToCSV(filename, rows) {
+  const safeFilename = (filename || 'xuat-so-hui.csv').replace(/[^a-zA-Z0-9_.-]/g, '_');
   const processRow = (row) => {
     return row.map(val => {
       let text = (val === null || val === undefined) ? '' : val.toString();
+      // Chống CSV Formula Injection: nếu bắt đầu bằng =, +, -, @, \t, \r thì thêm dấu nháy đơn '
+      if (/^[=+\-@\t\r]/.test(text)) {
+        text = "'" + text;
+      }
       text = text.replace(/"/g, '""');
       return `"${text}"`;
     }).join(',');
@@ -101,7 +169,24 @@ export function exportToCSV(filename, rows) {
   const link = document.createElement('a');
   const url = URL.createObjectURL(blob);
   link.setAttribute('href', url);
-  link.setAttribute('download', filename);
+  link.setAttribute('download', safeFilename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+/**
+ * Xuất file sao lưu toàn diện định dạng JSON (.sohui)
+ */
+export function exportJSONFile(filename, dataObj) {
+  const safeFilename = (filename || 'backup.sohui').replace(/[^a-zA-Z0-9_.-]/g, '_');
+  const jsonStr = JSON.stringify(dataObj, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', safeFilename);
   link.style.visibility = 'hidden';
   document.body.appendChild(link);
   link.click();

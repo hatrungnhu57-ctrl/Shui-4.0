@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#15803d" />
+      <stop offset="100%" stop-color="#166534" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#f59e0b" />
+      <stop offset="100%" stop-color="#b45309" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000000" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Nền bo góc chuẩn App Icon -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+
+  <!-- Họa tiết tia sáng nền nhẹ -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="#22c55e" stroke-width="2" opacity="0.15" />
+  <circle cx="256" cy="256" r="160" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="8 8" opacity="0.25" />
+
+  <!-- Cuộn giấy Sổ Hụi (Parchment Scroll) -->
+  <g filter="url(#shadow)">
+    <!-- Thân cuốn sổ màu vàng ngà -->
+    <rect x="136" y="116" width="240" height="280" rx="16" fill="#fffbeb" stroke="#fde68a" stroke-width="4" />
+
+    <!-- Gáy cuộn giấy hai đầu -->
+    <rect x="120" y="96" width="272" height="32" rx="16" fill="url(#goldGrad)" />
+    <rect x="120" y="384" width="272" height="32" rx="16" fill="url(#goldGrad)" />
+
+    <!-- Các dòng ghi chép tượng trưng -->
+    <line x1="176" y1="168" x2="336" y2="168" stroke="#15803d" stroke-width="8" stroke-linecap="round" />
+    <line x1="176" y1="204" x2="316" y2="204" stroke="#64748b" stroke-width="5" stroke-linecap="round" />
+    <line x1="176" y1="236" x2="296" y2="236" stroke="#64748b" stroke-width="5" stroke-linecap="round" />
+    <line x1="176" y1="268" x2="336" y2="268" stroke="#64748b" stroke-width="5" stroke-linecap="round" />
+
+    <!-- Con dấu tròn đỏ "SỔ HỤI" -->
+    <circle cx="296" cy="326" r="38" fill="none" stroke="#dc2626" stroke-width="3.5" stroke-dasharray="4 2" />
+    <circle cx="296" cy="326" r="32" fill="#fef2f2" fill-opacity="0.85" />
+    <text x="296" y="322" font-family="-apple-system, sans-serif" font-size="11" font-weight="900" fill="#dc2626" text-anchor="middle">SỔ HỤI</text>
+    <text x="296" y="336" font-family="-apple-system, sans-serif" font-size="9" font-weight="700" fill="#dc2626" text-anchor="middle">CHÍNH HÃNG</text>
+  </g>
+</svg>

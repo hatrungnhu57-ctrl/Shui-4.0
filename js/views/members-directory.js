@@ -4,7 +4,7 @@
  */
 
 import { store } from '../store.js';
-import { getCreditBadge, showToast } from '../utils.js';
+import { getCreditBadge, showToast, escapeHtml } from '../utils.js';
 
 export function renderMembersDirectory(container) {
   const profiles = store.state.profiles.filter(p => !p.isMerged);
@@ -135,11 +135,11 @@ export function renderMembersDirectory(container) {
         <div style="display: flex; justify-content: space-between; align-items: flex-start;">
           <div>
             <div style="display: flex; align-items: center; gap: 8px;">
-              <h4 style="font-size: 15.5px; font-weight: 700; color: var(--text-main);">${p.fullName}</h4>
-              ${p.nickname ? `<span style="font-size: 13px; color: var(--primary); font-weight: 600;">(${p.nickname})</span>` : ''}
+              <h4 style="font-size: 15.5px; font-weight: 700; color: var(--text-main);">${escapeHtml(p.fullName)}</h4>
+              ${p.nickname ? `<span style="font-size: 13px; color: var(--primary); font-weight: 600;">(${escapeHtml(p.nickname)})</span>` : ''}
             </div>
             <div style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">
-              📞 <strong>${p.phone}</strong> • 📍 ${p.address || 'Chưa có địa chỉ'}
+              📞 <strong>${escapeHtml(p.phone)}</strong> • 📍 ${escapeHtml(p.address) || 'Chưa có địa chỉ'}
             </div>
           </div>
           <div>${getCreditBadge(p.creditRating)}</div>
@@ -163,15 +163,15 @@ export function renderMembersDirectory(container) {
 
         ${p.riskNote ? `
           <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 6px 10px; font-size: 12px; color: #991b1b;">
-            <strong>⚠️ Lưu ý rủi ro:</strong> ${p.riskNote}
+            <strong>⚠️ Lưu ý rủi ro:</strong> ${escapeHtml(p.riskNote)}
           </div>
         ` : ''}
 
         <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; padding-top: 8px; border-top: 1px dashed var(--border-color);">
-          <button class="btn btn-sm btn-outline btn-edit-profile" data-id="${p.id}">
+          <button class="btn btn-sm btn-outline btn-edit-profile" data-id="${escapeHtml(p.id)}">
             ✏️ Sửa
           </button>
-          <button class="btn btn-sm btn-outline btn-merge-profile" data-id="${p.id}">
+          <button class="btn btn-sm btn-outline btn-merge-profile" data-id="${escapeHtml(p.id)}">
             🔗 Gộp hồ sơ
           </button>
         </div>

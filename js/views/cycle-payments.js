@@ -1,10 +1,11 @@
 /**
- * QUẢN LÝ ĐÓNG TIỀN, BIÊN NHẬN & CHỐT SỔ KỲ HỤI (PAYMENTS & RECEIPTS)
- * Ghi nhận tiền mặt / chuyển khoản, xem/in biên nhận điện tử, xuất PDF/Excel, chốt sổ
+ * QUẢN LÝ ĐÓNG TIỀN, BIÊN NHẬN, VIETQR & CHỐT SỔ KỲ HỤI (PAYMENTS & RECEIPTS)
+ * Ghi nhận tiền mặt / chuyển khoản, tự động sinh mã VietQR chuẩn ngân hàng,
+ * xem/in biên nhận điện tử, xuất PDF/Excel, chốt sổ.
  */
 
 import { store } from '../store.js';
-import { formatMoney, formatDate, formatDateTime, showToast, exportToCSV } from '../utils.js';
+import { formatMoney, formatDate, showToast, exportToCSV, generateVietQRUrl } from '../utils.js';
 
 export function renderCyclePayments(container, cycleId) {
   const cycle = store.state.cycles.find(c => c.id === cycleId);
@@ -21,12 +22,12 @@ export function renderCyclePayments(container, cycleId) {
   const group = store.state.groups.find(g => g.id === cycle.groupId);
   const payments = store.state.payments.filter(p => p.cycleId === cycle.id);
   const winnerProfile = store.state.profiles.find(p => p.id === cycle.winnerMemberProfileId);
+  const acc = store.currentAccount;
 
   // Thống kê tổng tiền thu
   const totalPaid = payments.reduce((sum, p) => sum + (p.amountPaid || 0), 0);
   const totalDue = payments.reduce((sum, p) => sum + (p.amountDue || 0), 0);
   const remaining = totalDue - totalPaid;
-  const isAllPaid = remaining <= 0 && payments.length > 0;
 
   container.innerHTML = `
     <!-- Header -->
@@ -79,7 +80,7 @@ export function renderCyclePayments(container, cycleId) {
       </div>
     </div>
 
-    <!-- Nút Xuất Báo Cáo & In Phiếu -->
+    <!-- Nút Thao Tác Nhanh -->
     <div style="display: flex; gap: 8px;">
       <button class="btn btn-sm btn-outline" id="btn-export-payments-excel" style="flex: 1;">
         📊 Xuất Excel Kỳ
@@ -143,13 +144,20 @@ export function renderCyclePayments(container, cycleId) {
                 <span>${p.paidAt ? formatDate(p.paidAt) : 'Chưa thu'}</span>
               </div>
 
-              <!-- Thao tác -->
-              <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-color);">
-                ${!isWinner ? `
-                  <button class="btn btn-sm btn-outline btn-record-single" data-id="${p.id}">
-                    ${isPaid ? '✏️ Sửa số tiền' : '💰 Ghi nhận thu tiền'}
+              <!-- Thao tác thu tiền & VietQR -->
+              <div style="display: flex; justify-content: flex-end; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-color); flex-wrap: wrap;">
+                ${!isWinner && !isPaid ? `
+                  <button class="btn btn-sm btn-outline btn-show-vietqr-pay" data-id="${p.id}" style="color: var(--primary); border-color: #86efac;">
+                    📱 Mã VietQR
                   </button>
                 ` : ''}
+
+                ${!isWinner ? `
+                  <button class="btn btn-sm btn-primary btn-record-single" data-id="${p.id}">
+                    ${isPaid ? '✏️ Sửa số tiền' : '💰 Thu tiền'}
+                  </button>
+                ` : ''}
+
                 ${isPaid && !isWinner ? `
                   <button class="btn btn-sm btn-outline btn-view-receipt-payment" data-pay-id="${p.id}">
                     🧾 Xem biên nhận
@@ -159,6 +167,25 @@ export function renderCyclePayments(container, cycleId) {
             </div>
           `;
         }).join('')}
+      </div>
+    </div>
+
+    <!-- Modal Xem Mã VietQR Chuyển Khoản Tức Thì -->
+    <div id="modal-vietqr-view" class="modal-overlay" style="display: none;">
+      <div class="modal-content" style="max-width: 380px; text-align: center;">
+        <div class="modal-header">
+          <h3 class="modal-title">📱 Mã VietQR Thanh Toán</h3>
+          <button class="btn btn-sm btn-outline btn-circle" id="btn-close-vietqr-modal">✕</button>
+        </div>
+        <div class="modal-body" id="vietqr-modal-body">
+          <!-- QR Image inserted dynamically -->
+        </div>
+        <div class="modal-footer" style="flex-direction: column; gap: 8px;">
+          <button class="btn btn-primary btn-block" id="btn-copy-vietqr-zalo">
+            📲 Sao chép tin nhắn Zalo gửi hụi viên
+          </button>
+          <button class="btn btn-outline btn-block" id="btn-close-vietqr-btn">Đóng</button>
+        </div>
       </div>
     </div>
 
@@ -188,14 +215,14 @@ export function renderCyclePayments(container, cycleId) {
           <div class="form-group">
             <label class="form-label">Hình thức thanh toán:</label>
             <select id="form-pay-method" class="form-control form-select">
-              <option value="transfer">Chuyển khoản Ngân hàng / Ví điện tử</option>
+              <option value="transfer">Chuyển khoản Ngân hàng (VietQR / Internet Banking)</option>
               <option value="cash">Tiền mặt trao tay</option>
             </select>
           </div>
 
           <div class="form-group" id="group-tx-ref">
             <label class="form-label">Mã giao dịch / Ngân hàng (Nếu CK):</label>
-            <input type="text" id="form-pay-txref" class="form-control" placeholder="VD: VCB.20260917.88123" />
+            <input type="text" id="form-pay-txref" class="form-control" placeholder="VD: VCB.2026.88123" />
           </div>
 
           <div class="form-group">
@@ -227,6 +254,49 @@ export function renderCyclePayments(container, cycleId) {
       </div>
     </div>
   `;
+
+  // Xử lý Modal VietQR
+  const modalVietQR = document.getElementById('modal-vietqr-view');
+  let currentShareZaloText = '';
+
+  container.querySelectorAll('.btn-show-vietqr-pay').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const pid = e.currentTarget.getAttribute('data-id');
+      const p = payments.find(pay => pay.id === pid);
+      const prof = store.state.profiles.find(prof => prof.id === p.memberProfileId);
+
+      if (p && prof) {
+        const memo = `${prof.fullName.split(' ').pop()} dong hui ${group.name.replace(/\s+/g, '')} ky ${cycle.cycleNumber}`;
+        const qrUrl = generateVietQRUrl(acc.bankCode || 'VCB', acc.accountNumber || '', acc.accountHolder || acc.fullName, p.amountDue, memo);
+
+        currentShareZaloText = `📢 THÔNG BÁO ĐÓNG TIỀN HỤI\n- Kính gửi: ${prof.fullName} (${prof.nickname})\n- Dây hụi: ${group.name} (Kỳ ${cycle.cycleNumber})\n- Số tiền cần nộp: ${formatMoney(p.amountDue)}\n- Tài khoản nhận: ${acc.accountNumber} (${acc.bankName || acc.bankCode}) - Chủ TK: ${acc.accountHolder || acc.fullName}\n- Cú pháp CK: ${memo}\n(Ứng dụng Sổ Hụi)`;
+
+        document.getElementById('vietqr-modal-body').innerHTML = `
+          <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 6px;">
+            Người nộp: <strong style="color:var(--text-main);">${prof.fullName}</strong>
+          </div>
+          <div style="font-size: 18px; font-weight: 800; color: var(--primary); margin-bottom: 10px;">
+            ${formatMoney(p.amountDue)}
+          </div>
+          <img src="${qrUrl}" alt="VietQR" style="width: 100%; max-width: 240px; border-radius: 8px; box-shadow: var(--shadow-sm);" />
+          <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px; text-align: left; background: #f8fafc; padding: 8px; border-radius: 6px;">
+            <div>🏦 Ngân hàng: <strong>${acc.bankName || acc.bankCode || 'Vietcombank'}</strong></div>
+            <div>💳 Số TK: <strong>${acc.accountNumber || 'Chưa cấu hình'}</strong></div>
+            <div>👤 Chủ TK: <strong>${acc.accountHolder || acc.fullName}</strong></div>
+            <div>📝 Nội dung: <strong>${memo}</strong></div>
+          </div>
+        `;
+        modalVietQR.style.display = 'flex';
+      }
+    });
+  });
+
+  document.getElementById('btn-close-vietqr-modal')?.addEventListener('click', () => modalVietQR.style.display = 'none');
+  document.getElementById('btn-close-vietqr-btn')?.addEventListener('click', () => modalVietQR.style.display = 'none');
+  document.getElementById('btn-copy-vietqr-zalo')?.addEventListener('click', () => {
+    navigator.clipboard?.writeText(currentShareZaloText);
+    showToast('Đã sao chép nội dung nhắc tiền và thông tin VietQR để gửi Zalo!', 'success');
+  });
 
   // Sự kiện ghi nhận đóng tiền
   const modalPay = document.getElementById('modal-record-payment');
@@ -265,7 +335,7 @@ export function renderCyclePayments(container, cycleId) {
     }
 
     try {
-      const res = store.recordPayment(paymentId, {
+      store.recordPayment(paymentId, {
         amountPaid,
         paymentMethod,
         transactionRef,
@@ -353,7 +423,7 @@ export function renderCyclePayments(container, cycleId) {
       <div class="receipt-paper" id="printable-receipt">
         <div style="text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 8px;">
           <h3 style="font-size: 16px; font-weight: 800; letter-spacing: 0.5px;">BIÊN NHẬN ĐÓNG TIỀN HỤI</h3>
-          <div style="font-size: 11.5px; color: var(--text-muted);">Mã số phiếu: <strong>${rec.receiptNumber}</strong></div>
+          <div style="font-size: 11.5px; color: var(--text-muted);">${rec.shopName || acc.shopName || 'Sổ Hụi Miền Nam'} • Phiếu: <strong>${rec.receiptNumber}</strong></div>
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; margin-top: 6px;">
@@ -395,7 +465,7 @@ export function renderCyclePayments(container, cycleId) {
     });
 
     document.getElementById('btn-share-receipt-zalo')?.addEventListener('click', () => {
-      const shareText = `🧾 BIÊN NHẬN ĐÓNG TIỀN HỤI [${rec.receiptNumber}]\n- Người nộp: ${rec.payerName}\n- Dây hụi: ${rec.huiName} (Kỳ ${rec.cycleNumber})\n- Số tiền: ${formatMoney(rec.amount)} (${rec.amountInWords})\n- Phương thức: ${rec.paymentMethod}\n- Thời gian: ${rec.paymentDate}\n(Ứng dụng Quản lý Sổ Hụi)`;
+      const shareText = `🧾 BIÊN NHẬN ĐÓNG TIỀN HỤI [${rec.receiptNumber}]\n- Đơn vị: ${rec.shopName || acc.shopName || 'Sổ Hụi'}\n- Người nộp: ${rec.payerName}\n- Dây hụi: ${rec.huiName} (Kỳ ${rec.cycleNumber})\n- Số tiền: ${formatMoney(rec.amount)} (${rec.amountInWords})\n- Phương thức: ${rec.paymentMethod}\n- Thời gian: ${rec.paymentDate}\n(Ứng dụng Quản lý Sổ Hụi)`;
       navigator.clipboard?.writeText(shareText);
       showToast('Đã sao chép nội dung biên nhận để gửi Zalo!', 'success');
     });

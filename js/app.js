@@ -1,10 +1,13 @@
 /**
  * SỔ HỤI - BỘ ĐIỀU HƯỚNG & KHỞI CHẠY ỨNG DỤNG (MAIN APP CONTROLLER)
+ * Hỗ trợ Đa tài khoản, Mã PIN bảo mật, Quản lý VietQR & Sao lưu khôi phục
  */
 
 import { store } from './store.js';
 import { showToast } from './utils.js';
 import { renderRoleSelector } from './views/role-selector.js';
+import { renderAuthView } from './views/auth-view.js';
+import { renderSettingsView } from './views/settings-view.js';
 import { renderOwnerDashboard } from './views/owner-dashboard.js';
 import { renderMemberDashboard } from './views/member-dashboard.js';
 import { renderMembersDirectory } from './views/members-directory.js';
@@ -17,22 +20,19 @@ import { renderGuideView, renderLogsView } from './views/guide-and-logs.js';
 class SoHuiApp {
   constructor() {
     this.appContainer = document.getElementById('app-container');
+    this.isPinUnlocked = false;
     this.init();
   }
 
   init() {
-    // Lắng nghe thay đổi URL Hash
     window.addEventListener('hashchange', () => this.handleRoute());
 
-    // Đăng ký nhận thông báo thay đổi State
     store.subscribe(() => {
       this.updateHeader();
     });
 
-    // Tạo Header, Main Content, Bottom Nav
     this.renderLayout();
 
-    // Điều hướng ban đầu
     if (!window.location.hash) {
       window.location.hash = '#select-role';
     } else {
@@ -49,7 +49,7 @@ class SoHuiApp {
           <span>SỔ HỤI</span>
         </div>
         <div id="header-right" style="display: flex; align-items: center; gap: 8px;">
-          <!-- Vai trò hiện tại -->
+          <!-- Vai trò & Tài khoản hiện tại -->
         </div>
       </header>
 
@@ -74,11 +74,27 @@ class SoHuiApp {
           <span class="icon">📚</span>
           <span>Cẩm nang</span>
         </button>
-        <button class="nav-item" data-route="#logs">
-          <span class="icon">📜</span>
-          <span>Nhật ký</span>
+        <button class="nav-item" data-route="#settings">
+          <span class="icon">⚙️</span>
+          <span>Cài đặt</span>
         </button>
       </nav>
+
+      <!-- Overlay Khóa Mã PIN (App Lock) -->
+      <div id="pin-lock-overlay" class="modal-overlay" style="display: none; background: #0f172a; z-index: 200;">
+        <div style="text-align: center; color: #fff; max-width: 320px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 16px;">
+          <div style="font-size: 44px;">🔒</div>
+          <div>
+            <h3 style="font-size: 18px; font-weight: 800; color: #fff;">Sổ Hụi Đang Khóa</h3>
+            <p style="font-size: 13px; color: #94a3b8; margin-top: 4px;">Vui lòng nhập mã PIN để mở khóa</p>
+          </div>
+          <input type="password" id="input-pin-code" maxlength="6" style="width: 180px; text-align: center; font-size: 24px; letter-spacing: 8px; padding: 10px; border-radius: 8px; border: 2px solid #22c55e; background: #1e293b; color: #fff;" />
+          <div style="display: flex; gap: 8px; width: 100%;">
+            <button class="btn btn-outline btn-block" id="btn-pin-logout" style="color: #94a3b8; border-color: #334155;">Đổi TK</button>
+            <button class="btn btn-primary btn-block" id="btn-pin-unlock">Mở Khóa 🔓</button>
+          </div>
+        </div>
+      </div>
 
       <!-- Modal Phản Hồi của Hụi Viên -->
       <div id="modal-feedback" class="modal-overlay" style="display: none;">
@@ -114,7 +130,6 @@ class SoHuiApp {
       window.location.hash = '#dashboard';
     });
 
-    // Gán sự kiện click cho Bottom Nav
     this.appContainer.querySelectorAll('.nav-item').forEach(btn => {
       btn.addEventListener('click', () => {
         const route = btn.getAttribute('data-route');
@@ -122,7 +137,33 @@ class SoHuiApp {
       });
     });
 
-    // Xử lý modal feedback
+    // Xử lý mã PIN khóa app
+    const pinOverlay = document.getElementById('pin-lock-overlay');
+    document.getElementById('btn-pin-unlock')?.addEventListener('click', () => {
+      const pinVal = document.getElementById('input-pin-code').value;
+      if (store.verifyPinCode(pinVal)) {
+        this.isPinUnlocked = true;
+        pinOverlay.style.display = 'none';
+        showToast('Mở khóa sổ thành công!', 'success');
+      } else {
+        showToast('Mã PIN không đúng, vui lòng thử lại!', 'danger');
+        document.getElementById('input-pin-code').value = '';
+      }
+    });
+
+    document.getElementById('input-pin-code')?.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('btn-pin-unlock')?.click();
+      }
+    });
+
+    document.getElementById('btn-pin-logout')?.addEventListener('click', () => {
+      pinOverlay.style.display = 'none';
+      this.isPinUnlocked = true;
+      window.location.hash = '#auth';
+    });
+
+    // Feedback modal
     const modalFb = document.getElementById('modal-feedback');
     document.getElementById('btn-close-fb-modal')?.addEventListener('click', () => modalFb.style.display = 'none');
     document.getElementById('btn-cancel-fb')?.addEventListener('click', () => modalFb.style.display = 'none');
@@ -142,7 +183,6 @@ class SoHuiApp {
 
     window.showFeedbackModal = (huiName, cycleNum) => {
       modalFb.style.display = 'flex';
-      const typeSelect = document.getElementById('fb-type');
       if (huiName && huiName !== 'Chung') {
         document.getElementById('fb-content').value = `Tôi xin phản hồi về dây [${huiName}] kỳ ${cycleNum}: `;
       }
@@ -151,10 +191,21 @@ class SoHuiApp {
     this.updateHeader();
   }
 
+  checkPinLock() {
+    if (store.currentAccount.pinCode && !this.isPinUnlocked) {
+      const pinOverlay = document.getElementById('pin-lock-overlay');
+      if (pinOverlay) {
+        pinOverlay.style.display = 'flex';
+        setTimeout(() => document.getElementById('input-pin-code')?.focus(), 200);
+      }
+    }
+  }
+
   updateHeader() {
     const headerRight = document.getElementById('header-right');
     if (!headerRight) return;
 
+    const acc = store.currentAccount;
     const role = store.state.currentRole;
     let roleText = 'Chủ Hụi';
     let roleClass = 'owner';
@@ -173,11 +224,11 @@ class SoHuiApp {
     headerRight.innerHTML = `
       <div class="role-tag ${roleClass}" id="btn-change-role" title="Bấm để đổi vai trò">
         <span>${roleIcon}</span>
-        <span>${roleText}</span>
+        <span>${acc.fullName.split(' ')[0]} (${roleText})</span>
         <span style="font-size: 10px; opacity: 0.7;">▼</span>
       </div>
-      <button class="btn btn-sm btn-outline btn-circle" id="btn-reset-demo" title="Khôi phục dữ liệu mẫu">
-        🔄
+      <button class="btn btn-sm btn-outline btn-circle" id="btn-goto-settings-header" title="Cài đặt & Sao lưu">
+        ⚙️
       </button>
     `;
 
@@ -185,12 +236,8 @@ class SoHuiApp {
       window.location.hash = '#select-role';
     });
 
-    document.getElementById('btn-reset-demo')?.addEventListener('click', () => {
-      if (confirm('Bạn có muốn khôi phục lại toàn bộ dữ liệu mẫu ban đầu của Sổ Hụi không?')) {
-        store.resetToDemoData();
-        showToast('Đã khôi phục dữ liệu mẫu thành công!', 'info');
-        window.location.hash = '#dashboard';
-      }
+    document.getElementById('btn-goto-settings-header')?.addEventListener('click', () => {
+      window.location.hash = '#settings';
     });
   }
 
@@ -202,7 +249,7 @@ class SoHuiApp {
 
     if (!mainContent) return;
 
-    // Cập nhật trạng thái Active trên Nav
+    // Cập nhật Nav
     this.appContainer.querySelectorAll('.nav-item').forEach(item => {
       const r = item.getAttribute('data-route');
       if (hash.startsWith(r)) {
@@ -212,6 +259,21 @@ class SoHuiApp {
       }
     });
 
+    // 0. Màn hình Xác thực Đăng ký / Đăng nhập (#auth, #login, #register)
+    if (hash === '#auth' || hash === '#login') {
+      if (navBar) navBar.style.display = 'none';
+      if (header) header.style.display = 'none';
+      renderAuthView(mainContent, 'login');
+      return;
+    }
+
+    if (hash === '#register') {
+      if (navBar) navBar.style.display = 'none';
+      if (header) header.style.display = 'none';
+      renderAuthView(mainContent, 'register');
+      return;
+    }
+
     // 1. Màn hình chọn vai trò
     if (hash === '#select-role') {
       if (navBar) navBar.style.display = 'none';
@@ -219,6 +281,9 @@ class SoHuiApp {
       renderRoleSelector(mainContent);
       return;
     }
+
+    // Kiểm tra khóa PIN đối với các trang bên trong
+    this.checkPinLock();
 
     if (navBar) navBar.style.display = 'grid';
     if (header) header.style.display = 'flex';
@@ -230,25 +295,30 @@ class SoHuiApp {
       } else if (store.state.currentRole === 'member') {
         renderMemberDashboard(mainContent);
       } else {
-        // Hybrid: Render cả hai tab
         this.renderHybridDashboard(mainContent);
       }
       return;
     }
 
-    // 3. Danh bạ hụi viên
+    // 3. Cài đặt & Sao lưu (#settings)
+    if (hash === '#settings') {
+      renderSettingsView(mainContent);
+      return;
+    }
+
+    // 4. Danh bạ hụi viên
     if (hash === '#members') {
       renderMembersDirectory(mainContent);
       return;
     }
 
-    // 4. Tạo dây hụi mới
+    // 5. Tạo dây hụi mới
     if (hash === '#create-group') {
       renderCreateGroup(mainContent);
       return;
     }
 
-    // 5. Danh sách dây hụi
+    // 6. Danh sách dây hụi
     if (hash === '#groups') {
       if (store.state.currentRole === 'member') {
         renderMemberDashboard(mainContent);
@@ -258,14 +328,14 @@ class SoHuiApp {
       return;
     }
 
-    // 6. Chi tiết dây hụi (#group-detail/:groupId)
+    // 7. Chi tiết dây hụi (#group-detail/:groupId)
     if (hash.startsWith('#group-detail/')) {
       const groupId = hash.split('/')[1];
       renderGroupDetail(mainContent, groupId);
       return;
     }
 
-    // 7. Khui hụi & Quay random (#draw/:groupId/:cycleId)
+    // 8. Khui hụi & Quay random (#draw/:groupId/:cycleId)
     if (hash.startsWith('#draw/')) {
       const parts = hash.split('/');
       const groupId = parts[1];
@@ -274,26 +344,26 @@ class SoHuiApp {
       return;
     }
 
-    // 8. Bảng đóng tiền kỳ (#cycle-payments/:cycleId)
+    // 9. Bảng đóng tiền kỳ (#cycle-payments/:cycleId)
     if (hash.startsWith('#cycle-payments/')) {
       const cycleId = hash.split('/')[1];
       renderCyclePayments(mainContent, cycleId);
       return;
     }
 
-    // 9. Cẩm nang
+    // 10. Cẩm nang
     if (hash === '#guide') {
       renderGuideView(mainContent);
       return;
     }
 
-    // 10. Nhật ký hoạt động
+    // 11. Nhật ký hoạt động
     if (hash === '#logs') {
       renderLogsView(mainContent);
       return;
     }
 
-    // Mặc định fallback
+    // Fallback
     renderOwnerDashboard(mainContent);
   }
 

@@ -1,5 +1,5 @@
 /**
- * MÀN HÌNH CHỌN VAI TRÒ ĐẦU TIÊN KHI MỞ APP
+ * MÀN HÌNH CHỌN VAI TRÒ & QUẢN LÝ SỔ (ROLE SELECTOR & LANDING)
  */
 
 import { store } from '../store.js';
@@ -7,19 +7,35 @@ import { showToast } from '../utils.js';
 
 export function renderRoleSelector(container) {
   const currentRole = store.state.currentRole;
-  const users = store.state.users;
+  const currentAcc = store.currentAccount;
 
   container.innerHTML = `
-    <div style="padding: 24px 16px; display: flex; flex-direction: column; gap: 20px; align-items: center; text-align: center; min-height: 80vh; justify-content: center;">
+    <div style="padding: 24px 16px; display: flex; flex-direction: column; gap: 18px; align-items: center; text-align: center; min-height: 85vh; justify-content: center; max-width: 480px; margin: 0 auto;">
       <div style="width: 80px; height: 80px; background: linear-gradient(135deg, var(--primary), var(--primary-light)); border-radius: 24px; display: flex; align-items: center; justify-content: center; font-size: 40px; box-shadow: 0 10px 25px rgba(21, 128, 61, 0.3);">
         📜
       </div>
 
       <div>
-        <h1 style="font-size: 26px; font-weight: 800; color: var(--text-main); margin-bottom: 6px;">SỔ HỤI</h1>
-        <p style="font-size: 14px; color: var(--text-muted); max-width: 320px;">
-          Giải pháp ghi chép, quản lý và lưu chứng cứ dây hụi minh bạch chuẩn tập quán miền Nam
+        <h1 style="font-size: 26px; font-weight: 800; color: var(--text-main); margin-bottom: 4px;">SỔ HỤI MIỀN NAM</h1>
+        <p style="font-size: 13.5px; color: var(--text-muted); max-width: 340px;">
+          Hệ thống ghi chép, tính toán tiền hụi sống/hụi chết, khui hụi và lưu trữ chứng cứ minh bạch
         </p>
+      </div>
+
+      <!-- Thẻ thông tin tài khoản hiện tại -->
+      <div class="card" style="width: 100%; padding: 12px 14px; background: #ffffff; text-align: left; display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 40px; height: 40px; border-radius: 10px; background: #dcfce7; display: flex; align-items: center; justify-content: center; font-size: 20px;">
+            ${currentAcc.role === 'owner' ? '👩‍💼' : (currentAcc.role === 'member' ? '👨‍🌾' : '🧕')}
+          </div>
+          <div>
+            <div style="font-weight: 700; font-size: 14px; color: var(--text-main);">${currentAcc.fullName}</div>
+            <div style="font-size: 11.5px; color: var(--text-muted);">SĐT: ${currentAcc.phone} ${currentAcc.isDemo ? '• <span style="color:#b45309;">(Bản Mẫu)</span>' : '• <span style="color:#15803d; font-weight:600;">(Sổ Thật)</span>'}</div>
+          </div>
+        </div>
+        <button class="btn btn-sm btn-outline" id="btn-goto-auth" style="font-size: 11.5px; padding: 4px 8px;">
+          Đổi Tài Khoản ➔
+        </button>
       </div>
 
       <div class="safety-disclaimer" style="text-align: left; width: 100%;">
@@ -29,89 +45,98 @@ export function renderRoleSelector(container) {
         </div>
       </div>
 
-      <div style="width: 100%; display: flex; flex-direction: column; gap: 12px; margin-top: 8px;">
-        <div style="font-size: 13px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
-          Xin vui lòng chọn vai trò sử dụng của bạn:
+      <div style="width: 100%; display: flex; flex-direction: column; gap: 10px;">
+        <div style="font-size: 12.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">
+          Chọn chế độ bạn muốn làm việc ngay:
         </div>
 
         <!-- Lựa chọn 1: Chủ Hụi -->
-        <button class="card" id="btn-role-owner" style="text-align: left; cursor: pointer; border: 2px solid ${currentRole === 'owner' ? 'var(--primary)' : 'var(--border-color)'}; background: ${currentRole === 'owner' ? 'var(--primary-bg)' : 'var(--bg-surface)'}; padding: 16px; transition: all 0.2s;">
-          <div style="display: flex; align-items: center; gap: 14px;">
-            <div style="width: 50px; height: 50px; border-radius: 14px; background: #dcfce7; display: flex; align-items: center; justify-content: center; font-size: 26px;">
+        <button class="card" id="btn-role-owner" style="text-align: left; cursor: pointer; border: 2px solid ${currentRole === 'owner' ? 'var(--primary)' : 'var(--border-color)'}; background: ${currentRole === 'owner' ? 'var(--primary-bg)' : 'var(--bg-surface)'}; padding: 14px; transition: all 0.2s;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 46px; height: 46px; border-radius: 12px; background: #dcfce7; display: flex; align-items: center; justify-content: center; font-size: 24px;">
               👩‍💼
             </div>
             <div style="flex: 1;">
-              <div style="font-weight: 700; font-size: 16px; color: var(--primary-dark);">Tôi là Chủ Hụi (Đầu thảo)</div>
-              <div style="font-size: 12.5px; color: var(--text-muted); margin-top: 2px;">
-                Tạo dây hụi, gom tiền, khui hụi, quay random, lập biên nhận và quản lý danh bạ
+              <div style="font-weight: 700; font-size: 15px; color: var(--primary-dark);">Chế độ Chủ Hụi (Đầu thảo)</div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                Tạo dây hụi, gom tiền, khui hụi, quay random, sinh VietQR và lập biên nhận
               </div>
             </div>
-            <span style="font-size: 20px; color: var(--primary);">➔</span>
+            <span style="font-size: 18px; color: var(--primary);">➔</span>
           </div>
         </button>
 
         <!-- Lựa chọn 2: Hụi Viên -->
-        <button class="card" id="btn-role-member" style="text-align: left; cursor: pointer; border: 2px solid ${currentRole === 'member' ? 'var(--blue)' : 'var(--border-color)'}; background: ${currentRole === 'member' ? 'var(--blue-bg)' : 'var(--bg-surface)'}; padding: 16px; transition: all 0.2s;">
-          <div style="display: flex; align-items: center; gap: 14px;">
-            <div style="width: 50px; height: 50px; border-radius: 14px; background: #dbeafe; display: flex; align-items: center; justify-content: center; font-size: 26px;">
+        <button class="card" id="btn-role-member" style="text-align: left; cursor: pointer; border: 2px solid ${currentRole === 'member' ? 'var(--blue)' : 'var(--border-color)'}; background: ${currentRole === 'member' ? 'var(--blue-bg)' : 'var(--bg-surface)'}; padding: 14px; transition: all 0.2s;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 46px; height: 46px; border-radius: 12px; background: #dbeafe; display: flex; align-items: center; justify-content: center; font-size: 24px;">
               👨‍🌾
             </div>
             <div style="flex: 1;">
-              <div style="font-weight: 700; font-size: 16px; color: var(--blue);">Tôi là Hụi Viên (Tay hụi)</div>
-              <div style="font-size: 12.5px; color: var(--text-muted); margin-top: 2px;">
-                Theo dõi các chân hụi đang chơi, lịch khui sắp tới, tiền cần đóng và kiểm tra biên nhận
+              <div style="font-weight: 700; font-size: 15px; color: var(--blue);">Chế độ Hụi Viên (Tay hụi)</div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                Theo dõi các chân hụi đã vào, lịch khui sắp tới, tiền cần đóng và biên nhận
               </div>
             </div>
-            <span style="font-size: 20px; color: var(--blue);">➔</span>
+            <span style="font-size: 18px; color: var(--blue);">➔</span>
           </div>
         </button>
 
-        <!-- Lựa chọn 3: Người vừa là Chủ vừa là Hụi Viên -->
-        <button class="card" id="btn-role-hybrid" style="text-align: left; cursor: pointer; border: 2px solid ${currentRole === 'hybrid' ? 'var(--purple)' : 'var(--border-color)'}; background: ${currentRole === 'hybrid' ? 'var(--purple-bg)' : 'var(--bg-surface)'}; padding: 16px; transition: all 0.2s;">
-          <div style="display: flex; align-items: center; gap: 14px;">
-            <div style="width: 50px; height: 50px; border-radius: 14px; background: #ede9fe; display: flex; align-items: center; justify-content: center; font-size: 26px;">
+        <!-- Lựa chọn 3: Vừa Chủ Vừa Hụi Viên -->
+        <button class="card" id="btn-role-hybrid" style="text-align: left; cursor: pointer; border: 2px solid ${currentRole === 'hybrid' ? 'var(--purple)' : 'var(--border-color)'}; background: ${currentRole === 'hybrid' ? 'var(--purple-bg)' : 'var(--bg-surface)'}; padding: 14px; transition: all 0.2s;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 46px; height: 46px; border-radius: 12px; background: #ede9fe; display: flex; align-items: center; justify-content: center; font-size: 24px;">
               🧕
             </div>
             <div style="flex: 1;">
-              <div style="font-weight: 700; font-size: 16px; color: var(--purple);">Tôi vừa là Chủ vừa là Hụi Viên</div>
-              <div style="font-size: 12.5px; color: var(--text-muted); margin-top: 2px;">
-                Quản lý các dây mình làm chủ đồng thời theo dõi các chân hụi mình tham gia
+              <div style="font-weight: 700; font-size: 15px; color: var(--purple);">Vừa làm Chủ vừa chơi Hụi</div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                Quản lý các dây mình làm chủ song song với chân hụi mình góp ở ngoài
               </div>
             </div>
-            <span style="font-size: 20px; color: var(--purple);">➔</span>
+            <span style="font-size: 18px; color: var(--purple);">➔</span>
           </div>
         </button>
       </div>
 
-      <div style="margin-top: 10px; width: 100%; border-top: 1px dashed var(--border-color); padding-top: 14px; display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-size: 12px; color: var(--text-muted);">Tài khoản mẫu: <strong>${store.state.currentUser.fullName}</strong></span>
-        <button class="btn btn-sm btn-outline" id="btn-switch-account" style="font-size: 11.5px;">Đổi tài khoản 🔄</button>
+      <div style="display: flex; gap: 10px; width: 100%; margin-top: 4px;">
+        <button class="btn btn-outline btn-sm btn-block" id="btn-goto-settings" style="padding: 10px;">
+          ⚙️ Cài Đặt Sổ & Sao Lưu
+        </button>
+        <button class="btn btn-primary btn-sm btn-block" id="btn-goto-register-new" style="padding: 10px;">
+          ✨ Tạo Tài Khoản Riêng
+        </button>
       </div>
     </div>
   `;
 
   document.getElementById('btn-role-owner')?.addEventListener('click', () => {
     store.setCurrentRole('owner');
-    showToast('Đã chuyển sang chế độ Chủ Hụi (Cô Bảy)', 'success');
+    showToast(`Đã vào chế độ Chủ Hụi (${currentAcc.fullName})`, 'success');
     window.location.hash = '#dashboard';
   });
 
   document.getElementById('btn-role-member')?.addEventListener('click', () => {
     store.setCurrentRole('member');
-    showToast('Đã chuyển sang chế độ Hụi Viên (Anh Ba Khía)', 'info');
+    showToast(`Đã vào chế độ Hụi Viên (${currentAcc.fullName})`, 'info');
     window.location.hash = '#dashboard';
   });
 
   document.getElementById('btn-role-hybrid')?.addEventListener('click', () => {
     store.setCurrentRole('hybrid');
-    showToast('Đã chuyển sang chế độ Chủ kiêm Hụi Viên (Chị Út Lành)', 'info');
+    showToast(`Đã vào chế độ Chủ kiêm Hụi Viên (${currentAcc.fullName})`, 'info');
     window.location.hash = '#dashboard';
   });
 
-  document.getElementById('btn-switch-account')?.addEventListener('click', () => {
-    const nextIndex = (users.findIndex(u => u.id === store.state.currentUser.id) + 1) % users.length;
-    store.switchUser(users[nextIndex].id);
-    renderRoleSelector(container);
-    showToast(`Đã đổi tài khoản sang: ${users[nextIndex].fullName}`, 'info');
+  document.getElementById('btn-goto-auth')?.addEventListener('click', () => {
+    window.location.hash = '#auth';
+  });
+
+  document.getElementById('btn-goto-settings')?.addEventListener('click', () => {
+    window.location.hash = '#settings';
+  });
+
+  document.getElementById('btn-goto-register-new')?.addEventListener('click', () => {
+    window.location.hash = '#register';
   });
 }
