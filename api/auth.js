@@ -5,6 +5,14 @@
 
 const CLOUD_KV_BUCKET = 'https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR';
 
+// Cấu hình eSMS.vn mặc định của Chủ Sổ Hụi
+const DEFAULT_ESMS_CONFIG = {
+  apiKey: 'ACF5B67259401F40783FD12B3B896F',
+  secretKey: '0731640B5A2E1FD9D21FDE34C7FF62',
+  brandname: 'SOHUI 4.0',
+  smsType: '2'
+};
+
 // Bộ nhớ cache tạm thời trên serverless
 const globalAccounts = global.__SO_HUI_CLOUD_ACCOUNTS || new Map();
 global.__SO_HUI_CLOUD_ACCOUNTS = globalAccounts;
@@ -81,7 +89,7 @@ async function getSmsConfig() {
       }
     } catch (e) {}
   }
-  return cfg || {};
+  return cfg || DEFAULT_ESMS_CONFIG;
 }
 
 // Gửi tin nhắn SMS OTP thật qua cổng eSMS.vn
@@ -89,24 +97,25 @@ async function sendSmsViaEsms(phone, otpCode) {
   const cleanPhone = normalizePhone(phone);
   const smsConfig = await getSmsConfig();
 
-  const apiKey = process.env.ESMS_API_KEY || smsConfig.apiKey || 'ACF5B67259401F40783FD12B3B896F';
-  const secretKey = process.env.ESMS_SECRET_KEY || smsConfig.secretKey;
-  const brandname = process.env.ESMS_BRANDNAME || smsConfig.brandname || 'Baokim';
-  const smsType = process.env.ESMS_SMS_TYPE || smsConfig.smsType || '2';
-
-  if (!apiKey || !secretKey) {
-    console.log(`[eSMS Mock] Chưa có SecretKey eSMS. Mã OTP cho ${cleanPhone}: ${otpCode}`);
-    return {
-      success: true,
-      isMock: true,
-      message: 'Chưa cấu hình SecretKey eSMS. Hệ thống gửi OTP mô phỏng để test.'
-    };
-  }
+  const apiKey = process.env.ESMS_API_KEY || smsConfig.apiKey || DEFAULT_ESMS_CONFIG.apiKey;
+  const secretKey = process.env.ESMS_SECRET_KEY || smsConfig.secretKey || DEFAULT_ESMS_CONFIG.secretKey;
+  const brandname = process.env.ESMS_BRANDNAME || smsConfig.brandname || DEFAULT_ESMS_CONFIG.brandname;
+  const smsType = process.env.ESMS_SMS_TYPE || smsConfig.smsType || DEFAULT_ESMS_CONFIG.smsType;
 
   const content = `[SO HUI] Ma xac thuc OTP cua ban la ${otpCode}. Ma co hieu luc trong 5 phut.`;
 
+  const codeMeanings = {
+    '100': 'Gửi tin nhắn SMS thành công qua eSMS',
+    '99': 'Lỗi không xác định từ nhà mạng',
+    '101': 'Sai ApiKey hoặc SecretKey eSMS',
+    '102': 'Tài khoản eSMS không đủ số dư để gửi tin nhắn',
+    '103': 'Brandname chưa được phê duyệt hoặc không tồn tại trên eSMS',
+    '104': 'Brandname không hợp lệ',
+    '105': 'Nội dung tin nhắn không hợp lệ theo mẫu đã đăng ký'
+  };
+
   try {
-    // 1. Thử gửi qua cổng HTTPS POST V4 của eSMS
+    // 1. Gửi qua HTTPS POST V4 của eSMS
     const esmsPostUrl = `https://rest.esms.vn/MainService.svc/json/SendMultipleMessage_V4_post_json`;
     const response = await fetch(esmsPostUrl, {
       method: 'POST',
@@ -117,47 +126,38 @@ async function sendSmsViaEsms(phone, otpCode) {
         Phone: cleanPhone,
         Content: content,
         SmsType: smsType,
-        Brandname: brandname
+        Brandname: brandname,
+        IsUnicode: '0'
       })
     });
 
     const resJson = await response.json().catch(() => ({}));
     console.log(`[eSMS Gateway Response]`, resJson);
 
-    const codeMeanings = {
-      '100': 'Gửi tin nhắn SMS thành công qua eSMS',
-      '99': 'Lỗi không xác định từ nhà mạng',
-      '101': 'Sai ApiKey hoặc SecretKey eSMS',
-      '102': 'Tài khoản eSMS không đủ số dư để gửi tin nhắn',
-      '103': 'Brandname chưa được phê duyệt trên eSMS',
-      '104': 'Brandname không hợp lệ',
-      '105': 'Nội dung tin nhắn không hợp lệ theo mẫu'
-    };
-
-    if (resJson && resJson.CodeResult === '100') {
+    if (resJson && (resJson.CodeResult === '100' || resJson.CodeResult === 100)) {
       return {
         success: true,
         isMock: false,
         smsId: resJson.SMSID,
-        message: 'Mã xác thực OTP đã được gửi đến số điện thoại qua tin nhắn SMS thật!'
+        message: `Mã xác thực OTP đã được gửi đến số ${cleanPhone} qua tin nhắn SMS thật!`
       };
     } else {
-      const errDetail = (resJson && codeMeanings[resJson.CodeResult]) || (resJson && resJson.ErrorMessage) || 'Lỗi gửi tin từ cổng SMS';
-      console.warn(`[eSMS Warning] Code: ${resJson ? resJson.CodeResult : 'null'} - ${errDetail}`);
+      const errDetail = (resJson && codeMeanings[String(resJson.CodeResult)]) || (resJson && resJson.ErrorMessage) || 'Lỗi gửi tin từ cổng SMS';
+      console.warn(`[eSMS Gateway Notice] Code: ${resJson ? resJson.CodeResult : 'null'} - ${errDetail}`);
       return {
         success: true,
         isMock: true,
         esmsError: errDetail,
         esmsCode: resJson ? resJson.CodeResult : null,
-        message: `Cổng eSMS phản hồi: ${errDetail}. Mã OTP hỗ trợ kiểm tra là ${otpCode}.`
+        message: `Cổng eSMS phản hồi: ${errDetail}. Mã OTP của bạn là ${otpCode}.`
       };
     }
   } catch (err) {
-    console.warn(`[eSMS Network Error]`, err.message);
+    console.warn(`[eSMS Gateway Error]`, err.message);
     return {
       success: true,
       isMock: true,
-      message: 'Không thể kết nối tới eSMS. Đang dùng mã OTP kiểm thử.'
+      message: `Đã phát mã OTP kiểm thử: ${otpCode}`
     };
   }
 }
@@ -206,7 +206,7 @@ module.exports = async function handler(req, res) {
         purpose: purpose || 'auth'
       });
 
-      // Gửi SMS qua eSMS
+      // Bắn tin qua eSMS thật
       const smsRes = await sendSmsViaEsms(cleanPhone, otpCode);
 
       return res.status(200).json({
@@ -223,10 +223,10 @@ module.exports = async function handler(req, res) {
     if (action === 'save_sms_config') {
       const { apiKey, secretKey, brandname, smsType } = body;
       const config = {
-        apiKey: (apiKey || '').trim(),
-        secretKey: (secretKey || '').trim(),
-        brandname: (brandname || 'Baokim').trim(),
-        smsType: smsType || '2',
+        apiKey: (apiKey || DEFAULT_ESMS_CONFIG.apiKey).trim(),
+        secretKey: (secretKey || DEFAULT_ESMS_CONFIG.secretKey).trim(),
+        brandname: (brandname || DEFAULT_ESMS_CONFIG.brandname).trim(),
+        smsType: smsType || DEFAULT_ESMS_CONFIG.smsType,
         updatedAt: new Date().toISOString()
       };
       global.__SO_HUI_SMS_CONFIG = config;

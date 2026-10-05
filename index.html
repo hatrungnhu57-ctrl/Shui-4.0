@@ -3397,15 +3397,15 @@ const store = new SoHuiStore();
 
 /**
  * MÀN HÌNH ĐĂNG NHẬP & ĐĂNG KÝ TÀI KHOẢN TRỰC TUYẾN (CLOUD AUTH VIEW)
- * Tích hợp xác thực mã SMS OTP thật (eSMS.vn), Đăng nhập đa thiết bị 100% thời gian thực,
- * và đồng bộ dữ liệu sổ hụi qua Đám mây vĩnh viễn.
+ * Tích hợp gửi mã SMS OTP thật qua eSMS.vn, Đăng nhập đa thiết bị 100% thời gian thực,
+ * và lưu trữ vĩnh viễn trên Đám mây.
  */
 
 
 
 
 
-function renderAuthView(container, initialTab = 'login') {
+function renderAuthView(container, initialTab = 'register') {
   const accounts = store.getAccounts();
   const lastPhone = (typeof localStorage !== 'undefined' && localStorage.getItem('SO_HUI_LAST_PHONE')) || '';
 
@@ -3423,14 +3423,89 @@ function renderAuthView(container, initialTab = 'login') {
         </div>
       </div>
 
-      <!-- Tab Switcher (Đăng nhập / Đăng ký) -->
+      <!-- Tab Switcher (Đăng ký / Đăng nhập) -->
       <div style="display: flex; background: #e2e8f0; padding: 4px; border-radius: 12px; gap: 4px;">
+        <button class="btn btn-sm ${initialTab === 'register' ? 'btn-primary' : 'btn-outline'}" id="tab-btn-register" style="flex: 1; border: none; font-weight: 700; padding: 8px;">
+          ✨ Đăng Ký Mới (OTP)
+        </button>
         <button class="btn btn-sm ${initialTab === 'login' ? 'btn-primary' : 'btn-outline'}" id="tab-btn-login" style="flex: 1; border: none; font-weight: 700; padding: 8px;">
           🔑 Đăng Nhập
         </button>
-        <button class="btn btn-sm ${initialTab === 'register' ? 'btn-primary' : 'btn-outline'}" id="tab-btn-register" style="flex: 1; border: none; font-weight: 700; padding: 8px;">
-          ✨ Đăng Ký Mới
-        </button>
+      </div>
+
+      <!-- FORM ĐĂNG KÝ TÀI KHOẢN MỚI (XÁC THỰC MÃ SMS OTP THẬT) -->
+      <div id="auth-register-section" style="${initialTab === 'register' ? 'display: flex;' : 'display: none;'} flex-direction: column; gap: 12px;">
+        <div class="card" style="padding: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div class="card-title" style="font-size: 15px; margin-bottom: 0;">
+              Đăng ký tài khoản Quản lý Sổ Hụi
+            </div>
+            <button type="button" id="btn-quick-config-esms" style="background: none; border: none; color: #16a34a; font-size: 12px; cursor: pointer; font-weight: 700; display: flex; align-items: center; gap: 4px;">
+              ⚙️ Cấu hình eSMS
+            </button>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" style="font-size: 12px;">Họ và tên của bạn: <span style="color:var(--accent);">*</span></label>
+            <input type="text" id="reg-fullname" class="form-control" placeholder="Ví dụ: Nguyễn Thị Hoa, Cô Ba..." />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" style="font-size: 12px;">Số điện thoại (nhận SMS OTP): <span style="color:var(--accent);">*</span></label>
+            <div style="display: flex; gap: 6px;">
+              <input type="tel" id="reg-phone" class="form-control" placeholder="Ví dụ: 0987654321" style="font-weight: 700; font-size: 15px;" />
+              <button type="button" class="btn btn-primary btn-sm" id="btn-send-reg-otp" style="white-space: nowrap; font-size: 12px; padding: 8px 12px; font-weight: 700;">
+                📲 Gửi Mã OTP
+              </button>
+            </div>
+          </div>
+
+          <!-- Khu vực nhập mã OTP xác thực SMS -->
+          <div id="reg-otp-container" style="background: #f0fdf4; border: 1px dashed #86efac; border-radius: 8px; padding: 12px; margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <label class="form-label" style="font-size: 12px; color: #166534; margin-bottom: 0; font-weight: 700;">Mã xác thực OTP (6 chữ số): <span style="color:var(--accent);">*</span></label>
+              <span id="reg-otp-timer" style="font-size: 11.5px; color: #15803d; font-weight: 700;"></span>
+            </div>
+            <input type="text" id="reg-otp" class="form-control" placeholder="Nhập 6 số từ tin nhắn SMS..." maxlength="6" style="font-family: monospace; font-size: 18px; letter-spacing: 6px; text-align: center; font-weight: 900;" />
+            <div id="reg-otp-help" style="font-size: 11.5px; color: #15803d; margin-top: 6px;">
+              💡 Nhập số điện thoại và bấm <strong>"Gửi Mã OTP"</strong> để nhận tin nhắn SMS xác thực.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" style="font-size: 12px;">Tạo mật khẩu đăng nhập: <span style="color:var(--accent);">*</span></label>
+            <div style="position: relative;">
+              <input type="password" id="reg-password" class="form-control" placeholder="Mật khẩu (ít nhất 3 ký tự)..." style="padding-right: 42px;" />
+              <button type="button" id="btn-toggle-reg-pwd" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 16px; padding: 4px;">
+                👁️
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" style="font-size: 12px;">Tên Tiệm Hụi / Sổ Hụi (tùy chọn):</label>
+            <input type="text" id="reg-shopname" class="form-control" placeholder="Ví dụ: Sổ Hụi Cô Hoa Chợ Chiều" />
+          </div>
+
+          <!-- Cấu hình tài khoản ngân hàng -->
+          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px; margin-top: 4px;">
+            <div style="font-weight: 700; font-size: 12px; color: var(--primary-dark); margin-bottom: 6px;">
+              💳 Ngân hàng nhận tiền (tự sinh mã VietQR):
+            </div>
+            <div class="form-group" style="margin-bottom: 6px;">
+              <select id="reg-bank-code" class="form-control form-select" style="font-size: 12.5px;">
+                ${VIETNAMESE_BANKS.map(b => `<option value="${escapeHtml(b.code)}">${escapeHtml(b.name)}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <input type="text" id="reg-bank-acc" class="form-control" placeholder="Số tài khoản ngân hàng..." style="font-size: 12.5px;" />
+            </div>
+          </div>
+
+          <button class="btn btn-primary btn-block" id="btn-submit-register" style="margin-top: 12px; padding: 12px; font-size: 15px; font-weight: 700;">
+            ✨ Xác Nhận OTP & Tạo Tài Khoản
+          </button>
+        </div>
       </div>
 
       <!-- FORM ĐĂNG NHẬP -->
@@ -3509,73 +3584,47 @@ function renderAuthView(container, initialTab = 'login') {
         ` : ''}
       </div>
 
-      <!-- FORM ĐĂNG KÝ TÀI KHOẢN MỚI QUA SMS OTP -->
-      <div id="auth-register-section" style="${initialTab === 'register' ? 'display: flex;' : 'display: none;'} flex-direction: column; gap: 12px;">
-        <div class="card" style="padding: 16px;">
-          <div class="card-title" style="font-size: 15px; margin-bottom: 8px;">
-            Đăng ký tài khoản Quản lý Sổ Hụi
+      <!-- MODAL CẤU HÌNH NHANH eSMS.VN -->
+      <div id="modal-quick-esms" class="modal-overlay" style="display: none; z-index: 260;">
+        <div class="modal-content" style="max-width: 380px;">
+          <div class="modal-header">
+            <h3 class="modal-title">⚙️ Cấu Hình Cổng SMS (eSMS.vn)</h3>
+            <button class="btn btn-sm btn-outline btn-circle" id="btn-close-quick-esms">✕</button>
           </div>
+          <div class="modal-body">
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;">
+              Nhập ApiKey & SecretKey từ tài khoản <strong>eSMS.vn</strong> để gửi tin nhắn SMS OTP thật về điện thoại.
+            </p>
 
-          <div class="form-group">
-            <label class="form-label" style="font-size: 12px;">Họ và tên của bạn: <span style="color:var(--accent);">*</span></label>
-            <input type="text" id="reg-fullname" class="form-control" placeholder="Ví dụ: Nguyễn Thị Hoa, Cô Ba..." />
-          </div>
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label class="form-label" style="font-size: 12px;">ApiKey (từ eSMS.vn):</label>
+              <input type="text" id="quick-esms-apikey" class="form-control" placeholder="ApiKey..." value="ACF5B67259401F40783FD12B3B896F" style="font-family: monospace; font-size: 12.5px;" />
+            </div>
 
-          <div class="form-group">
-            <label class="form-label" style="font-size: 12px;">Số điện thoại (nhận SMS OTP): <span style="color:var(--accent);">*</span></label>
-            <div style="display: flex; gap: 6px;">
-              <input type="tel" id="reg-phone" class="form-control" placeholder="Ví dụ: 0987654321" style="font-weight: 600;" />
-              <button type="button" class="btn btn-outline btn-sm" id="btn-send-reg-otp" style="white-space: nowrap; font-size: 12px; padding: 6px 10px; font-weight: 700;">
-                📲 Gửi OTP
-              </button>
+            <div class="form-group" style="margin-bottom: 8px;">
+              <label class="form-label" style="font-size: 12px;">SecretKey (từ eSMS.vn):</label>
+              <input type="password" id="quick-esms-secretkey" class="form-control" placeholder="Dán SecretKey bí mật vào đây..." value="0731640B5A2E1FD9D21FDE34C7FF62" style="font-family: monospace; font-size: 12.5px;" />
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div class="form-group" style="margin-bottom: 8px;">
+                <label class="form-label" style="font-size: 12px;">Brandname:</label>
+                <input type="text" id="quick-esms-brandname" class="form-control" placeholder="SOHUI 4.0" value="SOHUI 4.0" style="font-size: 12.5px;" />
+              </div>
+              <div class="form-group" style="margin-bottom: 8px;">
+                <label class="form-label" style="font-size: 12px;">Loại tin (SmsType):</label>
+                <select id="quick-esms-smstype" class="form-control form-select" style="font-size: 12.5px;">
+                  <option value="2" selected>2 - CSKH / OTP</option>
+                  <option value="1">1 - Quảng cáo</option>
+                  <option value="8">8 - Đầu số cố định</option>
+                </select>
+              </div>
             </div>
           </div>
-
-          <!-- Khu vực nhập mã OTP xác thực SMS -->
-          <div id="reg-otp-container" style="background: #f0fdf4; border: 1px dashed #86efac; border-radius: 8px; padding: 10px; margin-bottom: 8px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-              <label class="form-label" style="font-size: 12px; color: #166534; margin-bottom: 0; font-weight: 700;">Mã xác thực OTP (6 số): <span style="color:var(--accent);">*</span></label>
-              <span id="reg-otp-timer" style="font-size: 11px; color: #15803d; font-weight: 600;"></span>
-            </div>
-            <input type="text" id="reg-otp" class="form-control" placeholder="Nhập 6 chữ số từ SMS..." maxlength="6" style="font-family: monospace; font-size: 16px; letter-spacing: 4px; text-align: center; font-weight: 800;" />
-            <div id="reg-otp-help" style="font-size: 11px; color: #15803d; margin-top: 4px;">
-              💡 Mã xác thực được gửi đến SIM điện thoại của bạn qua SMS.
-            </div>
+          <div class="modal-footer">
+            <button class="btn btn-outline" id="btn-cancel-quick-esms" style="flex:1;">Hủy</button>
+            <button class="btn btn-primary" id="btn-save-quick-esms" style="flex:2;">💾 Lưu & Kích Hoạt</button>
           </div>
-
-          <div class="form-group">
-            <label class="form-label" style="font-size: 12px;">Tạo mật khẩu: <span style="color:var(--accent);">*</span></label>
-            <div style="position: relative;">
-              <input type="password" id="reg-password" class="form-control" placeholder="Mật khẩu (ít nhất 3 ký tự)..." style="padding-right: 42px;" />
-              <button type="button" id="btn-toggle-reg-pwd" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 16px; padding: 4px;">
-                👁️
-              </button>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" style="font-size: 12px;">Tên Tiệm Hụi / Sổ Hụi (tùy chọn):</label>
-            <input type="text" id="reg-shopname" class="form-control" placeholder="Ví dụ: Sổ Hụi Cô Hoa Chợ Chiều" />
-          </div>
-
-          <!-- Cấu hình tài khoản ngân hàng -->
-          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px; margin-top: 4px;">
-            <div style="font-weight: 700; font-size: 12px; color: var(--primary-dark); margin-bottom: 6px;">
-              💳 Ngân hàng nhận tiền (tự sinh mã VietQR):
-            </div>
-            <div class="form-group" style="margin-bottom: 6px;">
-              <select id="reg-bank-code" class="form-control form-select" style="font-size: 12.5px;">
-                ${VIETNAMESE_BANKS.map(b => `<option value="${escapeHtml(b.code)}">${escapeHtml(b.name)}</option>`).join('')}
-              </select>
-            </div>
-            <div class="form-group" style="margin-bottom: 0;">
-              <input type="text" id="reg-bank-acc" class="form-control" placeholder="Số tài khoản ngân hàng..." style="font-size: 12.5px;" />
-            </div>
-          </div>
-
-          <button class="btn btn-primary btn-block" id="btn-submit-register" style="margin-top: 10px; padding: 12px; font-size: 15px; font-weight: 700;">
-            ✨ Xác Nhận OTP & Tạo Tài Khoản
-          </button>
         </div>
       </div>
 
@@ -3670,7 +3719,57 @@ function renderAuthView(container, initialTab = 'login') {
     }
   });
 
-  // Sự kiện Gửi mã OTP Đăng ký
+  // Modal Cấu hình nhanh eSMS
+  const modalQuickEsms = document.getElementById('modal-quick-esms');
+  document.getElementById('btn-quick-config-esms')?.addEventListener('click', () => {
+    modalQuickEsms.style.display = 'flex';
+  });
+  document.getElementById('btn-close-quick-esms')?.addEventListener('click', () => {
+    modalQuickEsms.style.display = 'none';
+  });
+  document.getElementById('btn-cancel-quick-esms')?.addEventListener('click', () => {
+    modalQuickEsms.style.display = 'none';
+  });
+
+  document.getElementById('btn-save-quick-esms')?.addEventListener('click', async () => {
+    const apiKey = document.getElementById('quick-esms-apikey').value.trim();
+    const secretKey = document.getElementById('quick-esms-secretkey').value.trim();
+    const brandname = document.getElementById('quick-esms-brandname').value.trim();
+    const smsType = document.getElementById('quick-esms-smstype').value;
+
+    if (!apiKey || !secretKey) {
+      showToast('Vui lòng nhập đầy đủ ApiKey và SecretKey từ eSMS.vn!', 'warning');
+      return;
+    }
+
+    const btn = document.getElementById('btn-save-quick-esms');
+    try {
+      btn.disabled = true;
+      btn.innerText = '⏳ Đang lưu...';
+
+      await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_sms_config',
+          apiKey,
+          secretKey,
+          brandname,
+          smsType
+        })
+      });
+
+      showToast('Đã lưu cấu hình eSMS.vn thành công! Sẵn sàng gửi tin nhắn SMS thật.', 'success');
+      modalQuickEsms.style.display = 'none';
+    } catch (err) {
+      showToast('Lỗi lưu cấu hình: ' + err.message, 'danger');
+    } finally {
+      btn.disabled = false;
+      btn.innerText = '💾 Lưu & Kích Hoạt';
+    }
+  });
+
+  // Sự kiện Gửi mã OTP Đăng ký qua SMS thật
   let regOtpCooldown = 0;
   let regOtpTimerInterval = null;
   const btnSendRegOtp = document.getElementById('btn-send-reg-otp');
@@ -3687,16 +3786,16 @@ function renderAuthView(container, initialTab = 'login') {
 
     try {
       btnSendRegOtp.disabled = true;
-      btnSendRegOtp.innerText = '⏳ Đang gửi...';
+      btnSendRegOtp.innerText = '⏳ Đang gửi SMS...';
 
       const res = await cloudSync.sendOtpCloud(phone, 'register');
-      showToast(res.message || 'Mã OTP đã được gửi đến tin nhắn điện thoại của bạn!', 'success');
+      showToast(res.message || 'Mã OTP đã được gửi đến số điện thoại của bạn!', 'success');
 
       if (res.mockOtp) {
-        regOtpHelp.innerHTML = `💡 Mã OTP của bạn là: <strong style="font-size:13px; color:#b91c1c;">${res.mockOtp}</strong> (Nhập vào ô trên)`;
+        regOtpHelp.innerHTML = `💡 Mã OTP của bạn là: <strong style="font-size:14px; color:#b91c1c; letter-spacing:2px;">${res.mockOtp}</strong> (Nhập vào ô trên)`;
         document.getElementById('reg-otp').value = res.mockOtp;
       } else {
-        regOtpHelp.innerHTML = `📲 Đã gửi tin nhắn SMS đến số <strong>${phone}</strong>. Vui lòng mở tin nhắn để lấy mã.`;
+        regOtpHelp.innerHTML = `📲 Tin nhắn SMS thật đã được gửi đến số <strong>${phone}</strong>. Vui lòng mở tin nhắn SMS để lấy mã.`;
       }
 
       document.getElementById('reg-otp')?.focus();
@@ -3717,7 +3816,7 @@ function renderAuthView(container, initialTab = 'login') {
       }, 1000);
     } catch (err) {
       btnSendRegOtp.disabled = false;
-      btnSendRegOtp.innerText = '📲 Gửi OTP';
+      btnSendRegOtp.innerText = '📲 Gửi Mã OTP';
       showToast(err.message, 'danger');
     }
   }
@@ -3737,7 +3836,7 @@ function renderAuthView(container, initialTab = 'login') {
 
     try {
       btnSubmitLogin.disabled = true;
-      btnSubmitLogin.innerText = '⏳ Đang kiểm tra tài khoản...';
+      btnSubmitLogin.innerText = '⏳ Đang vào sổ...';
 
       const acc = await store.login(idVal, passVal);
       try { localStorage.setItem('SO_HUI_LAST_PHONE', acc.phone); } catch (e) {}
@@ -3773,7 +3872,7 @@ function renderAuthView(container, initialTab = 'login') {
       return;
     }
     if (!otp) {
-      showToast('Vui lòng bấm "Gửi OTP" và nhập mã xác thực từ SMS!', 'warning');
+      showToast('Vui lòng bấm "Gửi Mã OTP" và nhập mã xác thực từ tin nhắn SMS!', 'warning');
       handleSendRegOtp();
       return;
     }
@@ -3934,7 +4033,7 @@ function renderAuthView(container, initialTab = 'login') {
     const btnSend = document.getElementById('btn-send-forgot-otp');
     try {
       btnSend.disabled = true;
-      btnSend.innerText = '⏳ Đang gửi...';
+      btnSend.innerText = '⏳ Đang gửi SMS...';
       const res = await cloudSync.sendOtpCloud(phone, 'forgot_password');
       showToast(res.message || 'Đã gửi mã OTP đến số điện thoại!', 'success');
       if (res.mockOtp) {
@@ -4218,7 +4317,49 @@ function renderSettingsView(container) {
         </div>
       </div>
 
-      <!-- CARD 6: SAO LƯU & KHÔI PHỤC DỮ LIỆU FILE (OFFLINE BACKUP & RESTORE) -->
+      <!-- CARD 6: CẤU HÌNH CỔNG GỬI SMS OTP THẬT (eSMS.vn) -->
+      <div class="card" style="border-left: 4px solid #16a34a; background: #f0fdf4;">
+        <div class="card-header">
+          <div class="card-title" style="color: #166534; font-size: 15px;">
+            📲 Cấu Hình Cổng SMS OTP (eSMS.vn)
+          </div>
+          <span class="badge badge-success" id="settings-esms-badge">eSMS.vn</span>
+        </div>
+        <p style="font-size: 12px; color: #15803d; margin-bottom: 8px;">
+          Gắn <strong>ApiKey</strong> & <strong>SecretKey</strong> từ tài khoản eSMS.vn để gửi tin nhắn OTP và thông báo khui hụi trực tiếp về điện thoại.
+        </p>
+
+        <div class="form-group" style="margin-bottom: 8px;">
+          <label class="form-label" style="font-size: 12px;">ApiKey (từ eSMS.vn):</label>
+          <input type="text" id="set-esms-apikey" class="form-control" placeholder="Ví dụ: ACF5B67259401F40783FD12B3B896F" value="ACF5B67259401F40783FD12B3B896F" style="font-family: monospace; font-size: 12.5px;" />
+        </div>
+
+        <div class="form-group" style="margin-bottom: 8px;">
+          <label class="form-label" style="font-size: 12px;">SecretKey (từ eSMS.vn):</label>
+          <input type="password" id="set-esms-secretkey" class="form-control" placeholder="Nhập SecretKey lấy từ trang esms.vn..." value="0731640B5A2E1FD9D21FDE34C7FF62" style="font-family: monospace; font-size: 12.5px;" />
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+          <div class="form-group" style="margin-bottom: 8px;">
+            <label class="form-label" style="font-size: 12px;">Brandname:</label>
+            <input type="text" id="set-esms-brandname" class="form-control" placeholder="SOHUI 4.0 hoặc tên riêng" value="SOHUI 4.0" style="font-size: 12.5px;" />
+          </div>
+          <div class="form-group" style="margin-bottom: 8px;">
+            <label class="form-label" style="font-size: 12px;">Loại tin (SmsType):</label>
+            <select id="set-esms-smstype" class="form-control form-select" style="font-size: 12.5px;">
+              <option value="2" selected>2 - CSKH / OTP</option>
+              <option value="1">1 - Quảng cáo</option>
+              <option value="8">8 - Đầu số cố định</option>
+            </select>
+          </div>
+        </div>
+
+        <button class="btn btn-primary btn-sm btn-block" id="btn-save-settings-esms" style="background: #16a34a; border-color: #15803d; font-weight: 700; margin-top: 4px;">
+          💾 Lưu Cấu Hình eSMS.vn
+        </button>
+      </div>
+
+      <!-- CARD 7: SAO LƯU & KHÔI PHỤC DỮ LIỆU FILE (OFFLINE BACKUP & RESTORE) -->
       <div class="card">
         <div class="card-header">
           <div class="card-title">
@@ -4243,7 +4384,7 @@ function renderSettingsView(container) {
         </div>
       </div>
 
-      <!-- CARD 7: QUẢN LÝ TRẠNG THÁI DỮ LIỆU -->
+      <!-- CARD 8: QUẢN LÝ TRẠNG THÁI DỮ LIỆU -->
       <div class="card" style="border-color: #fecaca; background: #fffaf0;">
         <div class="card-header">
           <div class="card-title" style="color: #991b1b;">
@@ -4407,6 +4548,50 @@ function renderSettingsView(container) {
       store.setPinCode('');
       showToast('Đã tắt khóa mã PIN!', 'info');
       renderSettingsView(container);
+    }
+  });
+
+  // Lưu cấu hình eSMS
+  document.getElementById('btn-save-settings-esms')?.addEventListener('click', async () => {
+    const apiKey = document.getElementById('set-esms-apikey').value.trim();
+    const secretKey = document.getElementById('set-esms-secretkey').value.trim();
+    const brandname = document.getElementById('set-esms-brandname').value.trim();
+    const smsType = document.getElementById('set-esms-smstype').value;
+
+    if (!apiKey || !secretKey) {
+      showToast('Vui lòng nhập đầy đủ ApiKey và SecretKey từ eSMS.vn!', 'warning');
+      return;
+    }
+
+    const btn = document.getElementById('btn-save-settings-esms');
+    try {
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = '⏳ Đang lưu...';
+      }
+
+      await fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save_sms_config',
+          apiKey,
+          secretKey,
+          brandname,
+          smsType
+        })
+      });
+
+      showToast('Đã lưu cấu hình eSMS.vn thành công! Cổng gửi tin SMS thật đã kích hoạt.', 'success');
+      const badge = document.getElementById('settings-esms-badge');
+      if (badge) badge.innerText = '🟢 Đã Kích Hoạt';
+    } catch (e) {
+      showToast('Lỗi lưu cấu hình: ' + e.message, 'danger');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerText = '💾 Lưu Cấu Hình eSMS.vn';
+      }
     }
   });
 
@@ -7416,18 +7601,18 @@ function renderAdminView(container) {
 
         <div class="form-group" style="margin-bottom: 8px;">
           <label class="form-label" style="font-size: 12px;">ApiKey (từ eSMS.vn):</label>
-          <input type="text" id="cfg-esms-apikey" class="form-control" placeholder="Ví dụ: E1A2B3C4D5E6F7..." style="font-family: monospace; font-size: 12.5px;" />
+          <input type="text" id="cfg-esms-apikey" class="form-control" placeholder="Ví dụ: E1A2B3C4D5E6F7..." value="ACF5B67259401F40783FD12B3B896F" style="font-family: monospace; font-size: 12.5px;" />
         </div>
 
         <div class="form-group" style="margin-bottom: 8px;">
           <label class="form-label" style="font-size: 12px;">SecretKey (từ eSMS.vn):</label>
-          <input type="password" id="cfg-esms-secretkey" class="form-control" placeholder="Nhập SecretKey bí mật..." style="font-family: monospace; font-size: 12.5px;" />
+          <input type="password" id="cfg-esms-secretkey" class="form-control" placeholder="Nhập SecretKey bí mật..." value="0731640B5A2E1FD9D21FDE34C7FF62" style="font-family: monospace; font-size: 12.5px;" />
         </div>
 
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
           <div class="form-group" style="margin-bottom: 8px;">
             <label class="form-label" style="font-size: 12px;">Brandname / Đầu số:</label>
-            <input type="text" id="cfg-esms-brandname" class="form-control" placeholder="Baokim hoặc Brandname riêng" value="Baokim" style="font-size: 12.5px;" />
+            <input type="text" id="cfg-esms-brandname" class="form-control" placeholder="SOHUI 4.0 hoặc Brandname riêng" value="SOHUI 4.0" style="font-size: 12.5px;" />
           </div>
           <div class="form-group" style="margin-bottom: 8px;">
             <label class="form-label" style="font-size: 12px;">Loại tin (SmsType):</label>
