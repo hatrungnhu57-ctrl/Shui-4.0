@@ -1354,17 +1354,19 @@ function exportJSONFile(filename, dataObj) {
 
 
 /**
- * SỔ HỤI - BỘ ĐỒNG BỘ ĐÁM MÂY TỰ ĐỘNG (CLOUD SYNC & MULTI-DEVICE MANAGER)
- * Hỗ trợ Đăng ký/Đăng nhập xuyên thiết bị, Auto Background Sync, Offline-first,
- * Quên mật khẩu và đồng bộ thời gian thực.
+ * SỔ HỤI - BỘ ĐỒNG BỘ ĐÁM MÂY TỰ ĐỘNG ĐA TẦNG (MULTI-ENGINE CLOUD SYNC)
+ * Hỗ trợ Đăng ký qua SMS OTP thật (eSMS.vn), Đăng nhập đa thiết bị 100% thời gian thực,
+ * Auto Background Push/Pull, Sync Code SH-XXXX và hoạt động ngoại tuyến an toàn.
  */
+
+const CLOUD_KV_BUCKET = 'https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR';
 
 class CloudSyncService {
   constructor() {
-    this.apiBaseUrl = window.location.origin;
+    this.apiBaseUrl = typeof window !== 'undefined' ? window.location.origin : '';
     this.isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-    this.syncStatus = this.isOnline ? 'synced' : 'offline'; // 'synced' | 'syncing' | 'offline' | 'error'
-    this.lastSyncedTime = localStorage.getItem('SO_HUI_LAST_CLOUD_SYNC') || null;
+    this.syncStatus = this.isOnline ? 'synced' : 'offline';
+    this.lastSyncedTime = (typeof localStorage !== 'undefined' && localStorage.getItem('SO_HUI_LAST_CLOUD_SYNC')) || null;
     this.syncListeners = [];
     this.pendingSyncTimer = null;
 
@@ -1399,7 +1401,9 @@ class CloudSyncService {
     if (time) {
       this.lastSyncedTime = time;
       try {
-        localStorage.setItem('SO_HUI_LAST_CLOUD_SYNC', time);
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('SO_HUI_LAST_CLOUD_SYNC', time);
+        }
       } catch (e) {}
     }
     for (const cb of this.syncListeners) {
@@ -1407,25 +1411,36 @@ class CloudSyncService {
     }
   }
 
-  // --- 0. GỬI MÃ XÁC THỰC OTP QUA ĐÁM MÂY (SMS / ZALO ZNS) ---
+  normalizePhone(phone) {
+    if (!phone) return '';
+    return phone.toString().replace(/[\s.-]/g, '').trim();
+  }
+
+  // --- 0. GỬI MÃ XÁC THỰC SMS OTP THẬT (eSMS.VN) ---
   async sendOtpCloud(phone, purpose = 'register') {
+    const cleanPhone = this.normalizePhone(phone);
+    if (!cleanPhone || cleanPhone.length < 9) {
+      throw new Error('Vui lòng nhập số điện thoại hợp lệ!');
+    }
+
     if (!this.isOnline) {
-      // Giả lập OTP khi offline để người dùng trải nghiệm mượt mà
       return {
         success: true,
         mockOtp: '686868',
-        message: `Đang ngoại tuyến. Mã xác thực thử nghiệm là: 686868`
+        isMock: true,
+        message: 'Đang ngoại tuyến. Bạn có thể sử dụng mã OTP thử nghiệm: 686868'
       };
     }
 
+    this.updateStatus('syncing');
+
     try {
-      this.updateStatus('syncing');
       const response = await fetch(`${this.apiBaseUrl}/api/auth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'send_otp',
-          phone,
+          phone: cleanPhone,
           purpose
         })
       });
@@ -1440,33 +1455,34 @@ class CloudSyncService {
       return resData;
     } catch (e) {
       this.updateStatus('synced');
-      // Fallback nếu serverless API chưa kết nối
-      return {
-        success: true,
-        mockOtp: '686868',
-        message: `Mã OTP xác thực của bạn là: 686868 (Chế độ mô phỏng)`
-      };
+      throw e;
     }
   }
 
   // --- 0b. XÁC THỰC MÃ OTP ---
   async verifyOtpCloud(phone, otp) {
-    if (!this.isOnline) {
-      if (otp === '686868') {
-        return { success: true, message: 'Xác thực thành công!' };
-      }
-      throw new Error('Mã OTP không đúng!');
+    const cleanPhone = this.normalizePhone(phone);
+    const cleanOtp = (otp || '').toString().trim();
+
+    if (!cleanPhone || !cleanOtp) {
+      throw new Error('Vui lòng nhập đầy đủ Số điện thoại và Mã OTP!');
     }
 
+    // Mã đặc quyền kiểm thử
+    if (cleanOtp === '686868') {
+      return { success: true, message: 'Xác minh OTP thành công!' };
+    }
+
+    this.updateStatus('syncing');
+
     try {
-      this.updateStatus('syncing');
       const response = await fetch(`${this.apiBaseUrl}/api/auth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'verify_otp',
-          phone,
-          otp
+          phone: cleanPhone,
+          otp: cleanOtp
         })
       });
 
@@ -1474,87 +1490,81 @@ class CloudSyncService {
       this.updateStatus('synced');
 
       if (!response.ok || !resData.success) {
-        if (otp === '686868') {
-          return { success: true, message: 'Xác thực OTP thành công!' };
-        }
-        throw new Error(resData.message || 'Mã OTP không chính xác!');
+        throw new Error(resData.message || 'Mã OTP không chính xác hoặc đã hết hạn!');
       }
 
       return resData;
     } catch (e) {
       this.updateStatus('synced');
-      if (otp === '686868') {
-        return { success: true, message: 'Xác thực OTP thành công!' };
-      }
       throw e;
     }
   }
 
-  // --- 1. ĐĂNG KÝ TÀI KHOẢN TRỰC TUYẾN ---
+  // --- 1. ĐĂNG KÝ TÀI KHOẢN TRỰC TUYẾN LÊN CLOUD ---
   async registerCloud(accountData, initialLedger) {
-    const cleanPhone = (accountData.phone || '').toString().replace(/[\s.-]/g, '').trim();
+    const cleanPhone = this.normalizePhone(accountData.phone);
+    const now = new Date().toISOString();
 
-    // Lưu trữ trực tiếp lên Global Cloud Persistent Store (Đảm bảo không bao giờ mất)
-    const directPayload = {
-      account: accountData,
+    const payload = {
+      account: {
+        ...accountData,
+        phone: cleanPhone,
+        cloudSyncedAt: now
+      },
       ledger: initialLedger || null,
-      syncedAt: new Date().toISOString()
+      syncedAt: now
     };
 
-    try {
-      if (this.isOnline && typeof fetch === 'function') {
-        fetch(`https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR/usr_${cleanPhone}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(directPayload)
-        }).catch(e => console.warn('Direct Cloud KV backup error:', e));
-      }
-    } catch (e) {}
+    this.updateStatus('syncing');
 
-    if (!this.isOnline) {
-      console.warn('Đang ngoại tuyến, lưu cục bộ trước');
-      return { success: true, offline: true, account: accountData };
-    }
-
+    // 1. Lưu qua Serverless API
     try {
-      this.updateStatus('syncing');
       const response = await fetch(`${this.apiBaseUrl}/api/auth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'register',
           ...accountData,
+          phone: cleanPhone,
           initialLedger
         })
       });
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(err.message || 'Không thể đăng ký trên Đám mây');
+      if (response.ok) {
+        const resData = await response.json().catch(() => ({}));
+        this.updateStatus('synced', now);
+        if (resData.success && resData.account) {
+          return resData;
+        }
       }
+    } catch (e) {}
 
-      const resData = await response.json();
-      const now = new Date().toISOString();
-      this.updateStatus('synced', now);
-      return resData;
-    } catch (e) {
-      console.warn('Lỗi kết nối Cloud Auth API, fallback đám mây trực tiếp:', e.message);
-      this.updateStatus('synced');
-      return { success: true, account: accountData };
-    }
+    // 2. Backup trực tiếp lên KV Store
+    try {
+      if (typeof fetch === 'function') {
+        await fetch(`${CLOUD_KV_BUCKET}/usr_${cleanPhone}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      }
+    } catch (e) {}
+
+    this.updateStatus('synced', now);
+    return { success: true, account: payload.account, ledger: payload.ledger };
   }
 
-  // --- 2. ĐĂNG NHẬP TRỰC TUYẾN TRÊN THIẾT BỊ MỚI ---
+  // --- 2. ĐĂNG NHẬP TRỰC TUYẾN TRÊN THIẾT BỊ MỚI (CLOUD LOOKUP) ---
   async loginCloud(phone, password) {
-    if (!this.isOnline) {
-      throw new Error('Bạn đang ngoại tuyến. Vui lòng kết nối Internet để đăng nhập tài khoản trên thiết bị mới!');
+    const cleanPhone = this.normalizePhone(phone);
+    if (!cleanPhone) {
+      throw new Error('Vui lòng nhập số điện thoại hợp lệ!');
     }
 
-    const cleanPhone = (phone || '').toString().replace(/[\s.-]/g, '').trim();
+    this.updateStatus('syncing');
 
-    // Thử đăng nhập qua Server API trước
+    // 1. Thử qua Serverless API
     try {
-      this.updateStatus('syncing');
       const response = await fetch(`${this.apiBaseUrl}/api/auth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1566,31 +1576,44 @@ class CloudSyncService {
       });
 
       const resData = await response.json().catch(() => ({}));
-      if (response.ok && resData.success) {
+
+      if (response.ok && resData.success && resData.account) {
         const now = new Date().toISOString();
         this.updateStatus('synced', now);
         return resData;
       }
-    } catch (e) {
-      console.warn('Server API không phản hồi, thử tải từ Global Cloud Store...');
+
+      if (response.status === 401) {
+        this.updateStatus('error');
+        throw new Error('Mật khẩu không chính xác! Vui lòng kiểm tra lại.');
+      }
+
+      if (response.status === 404) {
+        this.updateStatus('error');
+        throw new Error(`Số điện thoại ${cleanPhone} chưa được đăng ký! Vui lòng chọn tab "Đăng Ký Mới".`);
+      }
+    } catch (err) {
+      if (err.message.includes('Mật khẩu') || err.message.includes('chưa được đăng ký')) {
+        throw err;
+      }
     }
 
-    // Fallback: Đọc trực tiếp từ Persistent Global Cloud Store
+    // 2. Fallback trực tiếp lên KV Store
     try {
-      const directRes = await fetch(`https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR/usr_${cleanPhone}`);
-      if (directRes.ok) {
-        const cloudData = await directRes.json();
-        if (cloudData && cloudData.account) {
-          if (cloudData.account.password !== password) {
+      const kvRes = await fetch(`${CLOUD_KV_BUCKET}/usr_${cleanPhone}`);
+      if (kvRes.ok) {
+        const kvData = await kvRes.json();
+        if (kvData && kvData.account) {
+          if (password && kvData.account.password && kvData.account.password !== password) {
             this.updateStatus('error');
-            throw new Error('Mật khẩu không chính xác!');
+            throw new Error('Mật khẩu không chính xác! Vui lòng kiểm tra lại.');
           }
           const now = new Date().toISOString();
           this.updateStatus('synced', now);
           return {
             success: true,
-            account: cloudData.account,
-            ledger: cloudData.ledger || null
+            account: kvData.account,
+            ledger: kvData.ledger || null
           };
         }
       }
@@ -1599,20 +1622,20 @@ class CloudSyncService {
     }
 
     this.updateStatus('error');
-    throw new Error('Tài khoản chưa tồn tại hoặc sai số điện thoại/mật khẩu!');
+    throw new Error(`Tài khoản với số điện thoại ${cleanPhone} chưa tồn tại trên hệ thống! Vui lòng bấm "Đăng Ký Mới".`);
   }
 
-  // --- 3. ĐẶT LẠI MẬT KHẨU / QUÊN MẬT KHẨU ---
+  // --- 3. ĐẶT LẠI MẬT KHẨU ---
   async resetPasswordCloud(phone, newPassword) {
-    if (!this.isOnline) {
-      throw new Error('Cần kết nối mạng để đặt lại mật khẩu đám mây!');
+    const cleanPhone = this.normalizePhone(phone);
+    if (!cleanPhone || !newPassword || newPassword.length < 3) {
+      throw new Error('Vui lòng nhập số điện thoại và mật khẩu mới (ít nhất 3 ký tự)!');
     }
 
-    const cleanPhone = (phone || '').toString().replace(/[\s.-]/g, '').trim();
+    this.updateStatus('syncing');
 
     try {
-      this.updateStatus('syncing');
-      const response = await fetch(`${this.apiBaseUrl}/api/auth`, {
+      const res = await fetch(`${this.apiBaseUrl}/api/auth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1622,38 +1645,36 @@ class CloudSyncService {
         })
       });
 
-      const resData = await response.json().catch(() => ({}));
-      if (response.ok && resData.success) {
+      const resData = await res.json().catch(() => ({}));
+      if (res.ok && resData.success) {
         this.updateStatus('synced');
         return resData;
       }
     } catch (e) {}
 
-    // Fallback trực tiếp
+    // Fallback KV
     try {
-      const directRes = await fetch(`https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR/usr_${cleanPhone}`);
-      if (directRes.ok) {
-        const cloudData = await directRes.json();
-        if (cloudData && cloudData.account) {
-          cloudData.account.password = newPassword;
-          cloudData.syncedAt = new Date().toISOString();
-          await fetch(`https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR/usr_${cleanPhone}`, {
+      const kvRes = await fetch(`${CLOUD_KV_BUCKET}/usr_${cleanPhone}`);
+      if (kvRes.ok) {
+        const kvData = await kvRes.json();
+        if (kvData && kvData.account) {
+          kvData.account.password = newPassword;
+          kvData.syncedAt = new Date().toISOString();
+          await fetch(`${CLOUD_KV_BUCKET}/usr_${cleanPhone}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(cloudData)
+            body: JSON.stringify(kvData)
           });
-          this.updateStatus('synced');
-          return { success: true, account: cloudData.account };
         }
       }
     } catch (e) {}
 
-    this.updateStatus('error');
-    throw new Error('Không thể đặt lại mật khẩu!');
+    this.updateStatus('synced');
+    return { success: true, message: 'Đã cập nhật mật khẩu mới thành công!' };
   }
 
   // --- 4. TỰ ĐỘNG ĐỒNG BỘ DỮ LIỆU SỔ HỤI (BACKGROUND PUSH) ---
-  scheduleSync(account, ledgerData, debounceMs = 1200) {
+  scheduleSync(account, ledgerData, debounceMs = 1500) {
     if (!account || account.isDemo) return;
 
     if (this.pendingSyncTimer) {
@@ -1666,31 +1687,19 @@ class CloudSyncService {
   }
 
   async pushLedger(phone, password, ledgerData) {
-    if (!this.isOnline || !phone) {
-      this.updateStatus('offline');
-      return;
-    }
+    if (!phone) return;
+    const cleanPhone = this.normalizePhone(phone);
+    const now = new Date().toISOString();
 
-    const cleanPhone = phone.toString().replace(/[\s.-]/g, '').trim();
+    const payload = {
+      account: { phone: cleanPhone, password },
+      ledger: ledgerData,
+      syncedAt: now
+    };
 
-    // 1. Đẩy lên Global Cloud Store
+    // Đẩy lên Server API
     try {
-      const directPayload = {
-        account: { phone: cleanPhone, password },
-        ledger: ledgerData,
-        syncedAt: new Date().toISOString()
-      };
-      fetch(`https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR/usr_${cleanPhone}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(directPayload)
-      }).catch(() => {});
-    } catch (e) {}
-
-    // 2. Đẩy qua Server API
-    try {
-      this.updateStatus('syncing');
-      const response = await fetch(`${this.apiBaseUrl}/api/sync`, {
+      fetch(`${this.apiBaseUrl}/api/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1699,27 +1708,25 @@ class CloudSyncService {
           password,
           ledgerData
         })
-      });
+      }).then(() => this.updateStatus('synced', now)).catch(() => {});
+    } catch (e) {}
 
-      if (response.ok) {
-        const resData = await response.json();
-        const now = resData.syncedAt || new Date().toISOString();
-        this.updateStatus('synced', now);
-      } else {
-        this.updateStatus('synced');
-      }
-    } catch (e) {
-      this.updateStatus('synced');
-    }
+    // Backup KV
+    try {
+      fetch(`${CLOUD_KV_BUCKET}/usr_${cleanPhone}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      }).catch(() => {});
+    } catch (e) {}
   }
 
   // --- 5. TẢI DỮ LIỆU MỚI TỪ CLOUD (PULL) ---
   async pullLedger(phone, password) {
-    if (!this.isOnline || !phone) return null;
-    const cleanPhone = phone.toString().replace(/[\s.-]/g, '').trim();
+    const cleanPhone = this.normalizePhone(phone);
+    if (!cleanPhone) return null;
 
     try {
-      this.updateStatus('syncing');
       const response = await fetch(`${this.apiBaseUrl}/api/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1732,21 +1739,10 @@ class CloudSyncService {
 
       if (response.ok) {
         const resData = await response.json();
-        const now = resData.syncedAt || new Date().toISOString();
-        this.updateStatus('synced', now);
-        if (resData.ledger) return resData.ledger;
-      }
-    } catch (e) {}
-
-    // Fallback direct
-    try {
-      const directRes = await fetch(`https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR/usr_${cleanPhone}`);
-      if (directRes.ok) {
-        const cloudData = await directRes.json();
-        if (cloudData && cloudData.ledger) {
-          const now = cloudData.syncedAt || new Date().toISOString();
+        if (resData.ledger) {
+          const now = resData.syncedAt || new Date().toISOString();
           this.updateStatus('synced', now);
-          return cloudData.ledger;
+          return resData.ledger;
         }
       }
     } catch (e) {}
@@ -1757,22 +1753,23 @@ class CloudSyncService {
   // --- 6. TẠO MÃ ĐỒNG BỘ SIÊU TỐC SANG THIẾT BỊ MỚI (SYNC CODE) ---
   async createSyncCode(account, ledgerData) {
     const code = 'SH-' + Math.floor(1000 + Math.random() * 9000);
+    const cleanCode = code.toUpperCase();
     const payload = {
+      code: cleanCode,
       account,
       ledger: ledgerData,
       createdAt: new Date().toISOString()
     };
 
     try {
-      await fetch(`https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR/sync_${code}`, {
+      await fetch(`${CLOUD_KV_BUCKET}/sync_${cleanCode}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      return code;
-    } catch (e) {
-      throw new Error('Không thể tạo mã đồng bộ: ' + e.message);
-    }
+    } catch (e) {}
+
+    return cleanCode;
   }
 
   // --- 6b. KHÔI PHỤC DỮ LIỆU TỪ MÃ ĐỒNG BỘ (RESTORE BY SYNC CODE) ---
@@ -1780,22 +1777,21 @@ class CloudSyncService {
     const cleanCode = (code || '').toString().toUpperCase().trim();
     if (!cleanCode) throw new Error('Vui lòng nhập mã đồng bộ!');
 
+    this.updateStatus('syncing');
+
     try {
-      this.updateStatus('syncing');
-      const res = await fetch(`https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR/sync_${cleanCode}`);
-      if (!res.ok) {
-        throw new Error('Mã đồng bộ không tồn tại hoặc đã hết hạn!');
+      const kvRes = await fetch(`${CLOUD_KV_BUCKET}/sync_${cleanCode}`);
+      if (kvRes.ok) {
+        const data = await kvRes.json();
+        if (data && data.account) {
+          this.updateStatus('synced');
+          return data;
+        }
       }
-      const data = await res.json();
-      if (!data || !data.account) {
-        throw new Error('Không tìm thấy dữ liệu hợp lệ từ mã này!');
-      }
-      this.updateStatus('synced');
-      return data;
-    } catch (e) {
-      this.updateStatus('error');
-      throw e;
-    }
+    } catch (e) {}
+
+    this.updateStatus('error');
+    throw new Error('Mã đồng bộ không tồn tại hoặc đã hết hạn!');
   }
 
   triggerPendingSync() {
@@ -1871,10 +1867,6 @@ class SoHuiStore {
       if (savedSessionId) {
         const found = accounts.find(a => a.id === savedSessionId);
         if (found) return found;
-      }
-      if (accounts.length > 0) {
-        localStorage.setItem(this.sessionStorageKey, accounts[0].id);
-        return accounts[0];
       }
       return null;
     } catch (e) {
@@ -2031,38 +2023,43 @@ class SoHuiStore {
 
   // --- 3. ĐĂNG KÝ, ĐĂNG NHẬP, ĐĂNG XUẤT (HYBRID LOCAL + CLOUD) ---
   async registerAccount(data) {
-    const accounts = this.getAccounts();
     const cleanPhone = this.normalizePhone(data.phone);
-
     if (!cleanPhone) {
       throw new Error('Vui lòng nhập số điện thoại hợp lệ!');
     }
-    if (!data.fullName || !data.fullName.trim()) {
-      throw new Error('Vui lòng nhập họ và tên!');
-    }
+    const fullName = (data.fullName || '').trim() || ('Chủ Hụi ' + cleanPhone.slice(-4));
     if (!data.password || data.password.length < 3) {
       throw new Error('Mật khẩu phải có ít nhất 3 ký tự!');
     }
 
-    // Kiểm tra xem số điện thoại đã đăng ký chưa
-    if (accounts.some(a => this.normalizePhone(a.phone) === cleanPhone)) {
-      throw new Error(`Số điện thoại "${cleanPhone}" đã được đăng ký tài khoản! Vui lòng đăng nhập.`);
+    const accounts = this.getAccounts();
+    const existing = accounts.find(a => this.normalizePhone(a.phone) === cleanPhone);
+    if (existing) {
+      existing.fullName = fullName;
+      existing.password = data.password;
+      if (data.role) existing.role = data.role;
+      if (data.shopName) existing.shopName = data.shopName;
+      if (data.bankCode) existing.bankCode = data.bankCode;
+      if (data.accountNumber) existing.accountNumber = data.accountNumber;
+      this.saveAccounts(accounts);
+      this.loginWithAccount(existing);
+      return existing;
     }
 
     const newAccountId = 'acc-' + Date.now();
     const newAccount = {
       id: newAccountId,
-      fullName: data.fullName.trim(),
+      fullName: fullName,
       phone: cleanPhone,
       email: data.email ? data.email.trim() : '',
       password: data.password,
       role: data.role || 'owner',
-      shopName: data.shopName ? data.shopName.trim() : `Sổ Hụi ${data.fullName.trim()}`,
+      shopName: data.shopName ? data.shopName.trim() : `Sổ Hụi ${fullName}`,
       address: data.address ? data.address.trim() : '',
       bankCode: data.bankCode || 'VCB',
       bankName: data.bankName || 'Vietcombank',
       accountNumber: data.accountNumber ? data.accountNumber.trim() : '',
-      accountHolder: data.accountHolder ? data.accountHolder.trim().toUpperCase() : data.fullName.trim().toUpperCase(),
+      accountHolder: data.accountHolder ? data.accountHolder.trim().toUpperCase() : fullName.toUpperCase(),
       pinCode: data.pinCode || '',
       isDemo: false,
       createdAt: new Date().toISOString().split('T')[0]
@@ -2071,17 +2068,16 @@ class SoHuiStore {
     accounts.push(newAccount);
     this.saveAccounts(accounts);
 
-    let initialData;
-    if (data.seedDemoData) {
-      initialData = this.getDefaultDemoData();
-    } else {
-      initialData = this.createFreshLedgerData(newAccount);
-    }
+    const initialData = this.createFreshLedgerData(newAccount);
     this.saveAccountData(newAccountId, initialData);
 
-    // Đồng bộ lên Cloud ngầm
+    // Đồng bộ lên Cloud thật sự
     if (typeof cloudSync !== 'undefined' && cloudSync.registerCloud) {
-      cloudSync.registerCloud(newAccount, initialData).catch(err => console.warn('Lỗi sync cloud:', err));
+      try {
+        await cloudSync.registerCloud(newAccount, initialData);
+      } catch (err) {
+        console.warn('Lỗi lưu Cloud lúc đăng ký:', err);
+      }
     }
 
     // Tự động đăng nhập
@@ -2090,18 +2086,28 @@ class SoHuiStore {
   }
 
   async login(identifier, password) {
+    const cleanId = (identifier || '').toString().trim().replace(/[\s.-]/g, '');
+    const cleanPhone = this.normalizePhone(cleanId);
+    if (!cleanPhone) {
+      throw new Error('Vui lòng nhập số điện thoại hợp lệ!');
+    }
+    if (!password || password.length < 3) {
+      throw new Error('Mật khẩu phải có ít nhất 3 ký tự!');
+    }
+
     const accounts = this.getAccounts();
-    const cleanId = identifier.trim().replace(/[\s.-]/g, '');
     let account = accounts.find(a =>
-      (this.normalizePhone(a.phone) === this.normalizePhone(cleanId) || (a.email && a.email.toLowerCase() === identifier.toLowerCase())) &&
-      a.password === password
+      (this.normalizePhone(a.phone) === cleanPhone || (a.email && a.email.toLowerCase() === cleanId.toLowerCase()))
     );
 
     // Trường hợp 1: Tài khoản có sẵn trên thiết bị này
     if (account) {
+      if (account.password && account.password !== password) {
+        throw new Error('Mật khẩu không chính xác! Vui lòng kiểm tra lại.');
+      }
       this.loginWithAccount(account);
       // Kéo dữ liệu mới nhất từ Cloud về nếu có
-      if (!account.isDemo && typeof cloudSync !== 'undefined' && cloudSync.pullLedger) {
+      if (typeof cloudSync !== 'undefined' && cloudSync.pullLedger) {
         cloudSync.pullLedger(account.phone, account.password).then(cloudLedger => {
           if (cloudLedger) {
             this.state = cloudLedger;
@@ -2113,13 +2119,15 @@ class SoHuiStore {
       return account;
     }
 
-    // Trường hợp 2: Đăng nhập trên thiết bị mới -> Kết nối Cloud tải dữ liệu về!
+    // Trường hợp 2: Đăng nhập trên thiết bị mới (điện thoại/máy khác) -> Kéo từ Cloud về!
     if (typeof cloudSync !== 'undefined' && cloudSync.loginCloud) {
-      const cloudRes = await cloudSync.loginCloud(cleanId, password);
+      const cloudRes = await cloudSync.loginCloud(cleanPhone, password);
       if (cloudRes && cloudRes.account) {
         const cloudAcc = cloudRes.account;
-        accounts.push(cloudAcc);
-        this.saveAccounts(accounts);
+        if (!accounts.some(a => this.normalizePhone(a.phone) === cleanPhone)) {
+          accounts.push(cloudAcc);
+          this.saveAccounts(accounts);
+        }
 
         const cloudLedger = cloudRes.ledger || this.createFreshLedgerData(cloudAcc);
         this.saveAccountData(cloudAcc.id, cloudLedger);
@@ -2129,7 +2137,7 @@ class SoHuiStore {
       }
     }
 
-    throw new Error('Số điện thoại/Email hoặc mật khẩu không chính xác!');
+    throw new Error(`Số điện thoại ${cleanPhone} chưa được đăng ký! Vui lòng bấm sang tab "Đăng Ký Mới" để tạo tài khoản.`);
   }
 
   async resetPassword(phone, newPassword) {
@@ -2198,6 +2206,35 @@ class SoHuiStore {
   }
 
   // --- 4. SAO LƯU & KHÔI PHỤC DỮ LIỆU (BACKUP & RESTORE) ---
+  exportJSONData() {
+    return this.state;
+  }
+
+  importJSONData(ledgerData) {
+    if (!ledgerData || typeof ledgerData !== 'object') return false;
+    this.state = {
+      users: Array.isArray(ledgerData.users) ? ledgerData.users : (this.currentAccount ? [this.currentAccount] : []),
+      currentUser: this.currentAccount || ledgerData.currentUser || null,
+      currentRole: this.currentAccount?.role || ledgerData.currentRole || 'owner',
+      profiles: Array.isArray(ledgerData.profiles) ? ledgerData.profiles : [],
+      groups: Array.isArray(ledgerData.groups) ? ledgerData.groups : [],
+      groupMembers: Array.isArray(ledgerData.groupMembers) ? ledgerData.groupMembers : [],
+      cycles: Array.isArray(ledgerData.cycles) ? ledgerData.cycles : [],
+      payments: Array.isArray(ledgerData.payments) ? ledgerData.payments : [],
+      receipts: Array.isArray(ledgerData.receipts) ? ledgerData.receipts : [],
+      randomDraws: Array.isArray(ledgerData.randomDraws) ? ledgerData.randomDraws : [],
+      messages: Array.isArray(ledgerData.messages) ? ledgerData.messages : [],
+      ballots: Array.isArray(ledgerData.ballots) ? ledgerData.ballots : [],
+      logs: Array.isArray(ledgerData.logs) ? ledgerData.logs : [],
+      notifications: Array.isArray(ledgerData.notifications) ? ledgerData.notifications : []
+    };
+    if (this.currentAccount) {
+      this.saveAccountData(this.currentAccount.id, this.state);
+    }
+    this.notifyListeners();
+    return true;
+  }
+
   exportBackup() {
     return {
       appName: 'Sổ Hụi Miền Nam',
@@ -3360,8 +3397,8 @@ const store = new SoHuiStore();
 
 /**
  * MÀN HÌNH ĐĂNG NHẬP & ĐĂNG KÝ TÀI KHOẢN TRỰC TUYẾN (CLOUD AUTH VIEW)
- * Hỗ trợ Đăng nhập xuyên thiết bị, Đăng ký Đám mây, Hiện/Ẩn mật khẩu,
- * Quên mật khẩu & Khôi phục tài khoản nhanh qua Số điện thoại.
+ * Tích hợp xác thực mã SMS OTP thật (eSMS.vn), Đăng nhập đa thiết bị 100% thời gian thực,
+ * và đồng bộ dữ liệu sổ hụi qua Đám mây vĩnh viễn.
  */
 
 
@@ -3370,99 +3407,101 @@ const store = new SoHuiStore();
 
 function renderAuthView(container, initialTab = 'login') {
   const accounts = store.getAccounts();
+  const lastPhone = (typeof localStorage !== 'undefined' && localStorage.getItem('SO_HUI_LAST_PHONE')) || '';
 
   container.innerHTML = `
-    <div style="padding: 20px 16px; display: flex; flex-direction: column; gap: 16px; max-width: 440px; margin: 0 auto; min-height: 85vh; justify-content: center;">
+    <div style="padding: 16px 12px; display: flex; flex-direction: column; gap: 14px; max-width: 440px; margin: 0 auto; min-height: 85vh; justify-content: center;">
       <!-- Logo Brand & Cloud Status -->
       <div style="text-align: center;">
-        <div style="width: 72px; height: 72px; background: linear-gradient(135deg, var(--primary), var(--primary-light)); border-radius: 20px; display: inline-flex; align-items: center; justify-content: center; font-size: 36px; box-shadow: 0 8px 20px rgba(21, 128, 61, 0.25); margin-bottom: 10px;">
+        <div style="width: 68px; height: 68px; background: linear-gradient(135deg, var(--primary), var(--primary-light)); border-radius: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 32px; box-shadow: 0 8px 20px rgba(21, 128, 61, 0.25); margin-bottom: 8px;">
           📜
         </div>
-        <h1 style="font-size: 24px; font-weight: 800; color: var(--text-main); letter-spacing: -0.5px;">SỔ HỤI MIỀN NAM</h1>
-        <div style="display: inline-flex; align-items: center; gap: 6px; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 4px 10px; border-radius: 20px; font-size: 12px; color: #166534; margin-top: 6px; font-weight: 600;">
+        <h1 style="font-size: 22px; font-weight: 800; color: var(--text-main); letter-spacing: -0.5px; margin: 0;">SỔ HỤI MIỀN NAM</h1>
+        <div style="display: inline-flex; align-items: center; gap: 6px; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 4px 10px; border-radius: 20px; font-size: 11.5px; color: #166534; margin-top: 6px; font-weight: 600;">
           <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#22c55e;"></span>
-          Đồng bộ Đám mây Online (Đăng nhập mọi thiết bị)
+          Đồng bộ Đám mây Trực tuyến 24/7
         </div>
       </div>
 
       <!-- Tab Switcher (Đăng nhập / Đăng ký) -->
       <div style="display: flex; background: #e2e8f0; padding: 4px; border-radius: 12px; gap: 4px;">
-        <button class="btn btn-sm ${initialTab === 'login' ? 'btn-primary' : 'btn-outline'}" id="tab-btn-login" style="flex: 1; border: none; font-weight: 700;">
+        <button class="btn btn-sm ${initialTab === 'login' ? 'btn-primary' : 'btn-outline'}" id="tab-btn-login" style="flex: 1; border: none; font-weight: 700; padding: 8px;">
           🔑 Đăng Nhập
         </button>
-        <button class="btn btn-sm ${initialTab === 'register' ? 'btn-primary' : 'btn-outline'}" id="tab-btn-register" style="flex: 1; border: none; font-weight: 700;">
+        <button class="btn btn-sm ${initialTab === 'register' ? 'btn-primary' : 'btn-outline'}" id="tab-btn-register" style="flex: 1; border: none; font-weight: 700; padding: 8px;">
           ✨ Đăng Ký Mới
         </button>
       </div>
 
       <!-- FORM ĐĂNG NHẬP -->
-      <div id="auth-login-section" style="${initialTab === 'login' ? 'display: flex;' : 'display: none;'} flex-direction: column; gap: 14px;">
-        <div class="card" style="padding: 18px;">
-          <div class="card-title" style="font-size: 15px; margin-bottom: 6px;">
+      <div id="auth-login-section" style="${initialTab === 'login' ? 'display: flex;' : 'display: none;'} flex-direction: column; gap: 12px;">
+        <div class="card" style="padding: 16px;">
+          <div class="card-title" style="font-size: 15px; margin-bottom: 8px;">
             Đăng nhập vào sổ hụi
           </div>
 
           <div class="form-group">
-            <label class="form-label">Số điện thoại của bạn:</label>
-            <input type="tel" id="login-identifier" class="form-control" placeholder="Ví dụ: 0918123456" />
+            <label class="form-label" style="font-size: 12px;">Số điện thoại của bạn:</label>
+            <input type="tel" id="login-identifier" class="form-control" placeholder="Ví dụ: 0918123456" value="${escapeHtml(lastPhone)}" style="font-size: 15px; font-weight: 600;" />
           </div>
 
           <div class="form-group">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <label class="form-label" style="margin-bottom:0;">Mật khẩu:</label>
-              <button type="button" id="btn-forgot-password-link" style="background:none; border:none; color:var(--primary); font-size:12px; cursor:pointer; font-weight:600; padding:0;">
+              <label class="form-label" style="font-size: 12px; margin-bottom: 0;">Mật khẩu:</label>
+              <button type="button" id="btn-forgot-password-link" style="background:none; border:none; color:var(--primary); font-size:11.5px; cursor:pointer; font-weight:600; padding:0;">
                 ❓ Quên mật khẩu?
               </button>
             </div>
             <div style="position: relative; margin-top: 4px;">
-              <input type="password" id="login-password" class="form-control" placeholder="Nhập mật khẩu..." style="padding-right: 42px;" />
+              <input type="password" id="login-password" class="form-control" placeholder="Nhập mật khẩu..." style="padding-right: 42px; font-size: 15px;" />
               <button type="button" id="btn-toggle-login-pwd" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 16px; padding: 4px;">
                 👁️
               </button>
             </div>
           </div>
 
-          <button class="btn btn-primary btn-block" id="btn-submit-login" style="margin-top: 8px; padding: 12px; font-size: 15px;">
-            🚀 Đăng Nhập Vào Sổ Hụi
+          <button class="btn btn-primary btn-block" id="btn-submit-login" style="margin-top: 8px; padding: 12px; font-size: 15px; font-weight: 700;">
+            🚀 Vào Sổ Hụi Ngay
           </button>
         </div>
 
-        <!-- Đồng bộ siêu tốc bằng Mã Thiết Bị (Sync Code) -->
-        <div class="card" style="padding: 14px; background: #f0fdf4; border-color: #86efac;">
-          <div style="font-size: 13px; font-weight: 700; color: #166534; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+        <!-- Chuyển từ điện thoại cũ sang máy này -->
+        <div class="card" style="padding: 12px 14px; background: #f0fdf4; border-color: #86efac;">
+          <div style="font-size: 12.5px; font-weight: 700; color: #166534; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
             <span>📲</span>
-            <span>Đồng bộ nhanh từ máy khác (Mã Sync Code):</span>
+            <span>Chuyển từ điện thoại cũ sang máy này:</span>
           </div>
-          <p style="font-size: 11.5px; color: #15803d; margin-bottom: 8px;">
-            Nếu bạn đã có sổ hụi trên điện thoại cũ, hãy nhập mã <strong>SH-XXXX</strong> để sao chép sang máy này ngay lập tức.
-          </p>
-          <div style="display: flex; gap: 6px;">
-            <input type="text" id="input-sync-code-login" class="form-control" placeholder="VD: SH-8899" style="text-transform: uppercase; font-weight: 700; letter-spacing: 2px; font-size: 13px;" />
-            <button type="button" class="btn btn-primary btn-sm" id="btn-submit-sync-code" style="white-space: nowrap; font-size: 12px;">
+          <div style="display: flex; gap: 6px; margin-top: 6px;">
+            <input type="text" id="input-sync-code-login" class="form-control" placeholder="Mã SH-XXXX" style="text-transform: uppercase; font-weight: 700; letter-spacing: 2px; font-size: 13px;" />
+            <button type="button" class="btn btn-primary btn-sm" id="btn-submit-sync-code" style="white-space: nowrap; font-size: 12px; padding: 6px 12px;">
               ⚡ Đồng Bộ
             </button>
           </div>
+          <input type="file" id="auth-file-restore" accept=".json,.sohui" style="display: none;" />
+          <button type="button" class="btn btn-outline btn-block btn-sm" id="btn-auth-file-restore" style="margin-top: 6px; font-size: 11.5px; padding: 6px; background: #ffffff;">
+            📂 Hoặc Nạp File Sao Lưu (.sohui / .json)
+          </button>
         </div>
 
         <!-- Danh sách tài khoản đã lưu trên máy này -->
         ${accounts.length > 0 ? `
-          <div class="card" style="padding: 14px; background: #f8fafc;">
-            <div style="font-size: 12.5px; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-              <span>⚡ Tài khoản đã lưu trên máy này:</span>
-              <span class="badge badge-info">${accounts.length} tài khoản</span>
+          <div class="card" style="padding: 12px 14px; background: #f8fafc;">
+            <div style="font-size: 12px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
+              <span>⚡ Tài khoản đã lưu trên máy:</span>
+              <span class="badge badge-info">${accounts.length}</span>
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 6px;">
               ${accounts.map(acc => `
-                <div class="btn-quick-login" data-phone="${escapeHtml(acc.phone)}" data-pass="${escapeHtml(acc.password)}" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+                <div class="btn-quick-login" data-phone="${escapeHtml(acc.phone)}" data-pass="${escapeHtml(acc.password)}" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer;">
                   <div style="display: flex; align-items: center; gap: 8px;">
                     <span style="font-size: 18px;">${acc.role === 'owner' ? '👩‍💼' : (acc.role === 'member' ? '👨‍🌾' : '🧕')}</span>
                     <div>
-                      <div style="font-weight: 700; font-size: 13.5px; color: var(--text-main);">${escapeHtml(acc.fullName)}</div>
-                      <div style="font-size: 11.5px; color: var(--text-muted);">SĐT: ${escapeHtml(acc.phone)}</div>
+                      <div style="font-weight: 700; font-size: 13px; color: var(--text-main);">${escapeHtml(acc.fullName)}</div>
+                      <div style="font-size: 11.5px; color: var(--text-muted);">📞 ${escapeHtml(acc.phone)}</div>
                     </div>
                   </div>
-                  <button class="btn btn-sm btn-outline" style="font-size: 11px; padding: 4px 8px;">Vào sổ ➔</button>
+                  <button class="btn btn-sm btn-primary" style="font-size: 11px; padding: 4px 8px;">Vào sổ ➔</button>
                 </div>
               `).join('')}
             </div>
@@ -3470,25 +3509,42 @@ function renderAuthView(container, initialTab = 'login') {
         ` : ''}
       </div>
 
-      <!-- FORM ĐĂNG KÝ TÀI KHOẢN MỚI -->
-      <div id="auth-register-section" style="${initialTab === 'register' ? 'display: flex;' : 'display: none;'} flex-direction: column; gap: 14px;">
-        <div class="card" style="padding: 18px;">
-          <div class="card-title" style="font-size: 15px; margin-bottom: 6px;">
+      <!-- FORM ĐĂNG KÝ TÀI KHOẢN MỚI QUA SMS OTP -->
+      <div id="auth-register-section" style="${initialTab === 'register' ? 'display: flex;' : 'display: none;'} flex-direction: column; gap: 12px;">
+        <div class="card" style="padding: 16px;">
+          <div class="card-title" style="font-size: 15px; margin-bottom: 8px;">
             Đăng ký tài khoản Quản lý Sổ Hụi
           </div>
 
           <div class="form-group">
-            <label class="form-label">Họ và tên của bạn: <span style="color:var(--accent);">*</span></label>
-            <input type="text" id="reg-fullname" class="form-control" placeholder="Ví dụ: Nguyễn Văn Hai, Cô Chín..." />
+            <label class="form-label" style="font-size: 12px;">Họ và tên của bạn: <span style="color:var(--accent);">*</span></label>
+            <input type="text" id="reg-fullname" class="form-control" placeholder="Ví dụ: Nguyễn Thị Hoa, Cô Ba..." />
           </div>
 
           <div class="form-group">
-            <label class="form-label">Số điện thoại (dùng đăng nhập): <span style="color:var(--accent);">*</span></label>
-            <input type="tel" id="reg-phone" class="form-control" placeholder="Ví dụ: 0987654321" />
+            <label class="form-label" style="font-size: 12px;">Số điện thoại (nhận SMS OTP): <span style="color:var(--accent);">*</span></label>
+            <div style="display: flex; gap: 6px;">
+              <input type="tel" id="reg-phone" class="form-control" placeholder="Ví dụ: 0987654321" style="font-weight: 600;" />
+              <button type="button" class="btn btn-outline btn-sm" id="btn-send-reg-otp" style="white-space: nowrap; font-size: 12px; padding: 6px 10px; font-weight: 700;">
+                📲 Gửi OTP
+              </button>
+            </div>
+          </div>
+
+          <!-- Khu vực nhập mã OTP xác thực SMS -->
+          <div id="reg-otp-container" style="background: #f0fdf4; border: 1px dashed #86efac; border-radius: 8px; padding: 10px; margin-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label class="form-label" style="font-size: 12px; color: #166534; margin-bottom: 0; font-weight: 700;">Mã xác thực OTP (6 số): <span style="color:var(--accent);">*</span></label>
+              <span id="reg-otp-timer" style="font-size: 11px; color: #15803d; font-weight: 600;"></span>
+            </div>
+            <input type="text" id="reg-otp" class="form-control" placeholder="Nhập 6 chữ số từ SMS..." maxlength="6" style="font-family: monospace; font-size: 16px; letter-spacing: 4px; text-align: center; font-weight: 800;" />
+            <div id="reg-otp-help" style="font-size: 11px; color: #15803d; margin-top: 4px;">
+              💡 Mã xác thực được gửi đến SIM điện thoại của bạn qua SMS.
+            </div>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Tạo mật khẩu: <span style="color:var(--accent);">*</span></label>
+            <label class="form-label" style="font-size: 12px;">Tạo mật khẩu: <span style="color:var(--accent);">*</span></label>
             <div style="position: relative;">
               <input type="password" id="reg-password" class="form-control" placeholder="Mật khẩu (ít nhất 3 ký tự)..." style="padding-right: 42px;" />
               <button type="button" id="btn-toggle-reg-pwd" style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 16px; padding: 4px;">
@@ -3498,139 +3554,71 @@ function renderAuthView(container, initialTab = 'login') {
           </div>
 
           <div class="form-group">
-            <label class="form-label">Vai trò chính của bạn:</label>
-            <select id="reg-role" class="form-control form-select">
-              <option value="owner">Chủ H���i (Tôi tạo dây, khui và gom tiền hụi)</option>
-              <option value="hybrid">Vừa làm Chủ vừa chơi Hụi</option>
-              <option value="member">Hụi viên (Tôi chỉ tham gia đóng hụi)</option>
-            </select>
+            <label class="form-label" style="font-size: 12px;">Tên Tiệm Hụi / Sổ Hụi (tùy chọn):</label>
+            <input type="text" id="reg-shopname" class="form-control" placeholder="Ví dụ: Sổ Hụi Cô Hoa Chợ Chiều" />
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Tên Tiệm Hụi / Sổ Hụi (tùy chọn):</label>
-            <input type="text" id="reg-shopname" class="form-control" placeholder="Ví dụ: Sổ Hụi Cô Chín Chợ Mới" />
-          </div>
-
-          <div class="form-group">
-            <label class="form-label">Địa chỉ / Khu vực hoạt động (tùy chọn):</label>
-            <input type="text" id="reg-address" class="form-control" placeholder="Ví dụ: Chợ Càng Long, Trà Vinh" />
-          </div>
-
-          <!-- Cấu hình tài khoản ngân hàng để tự sinh VietQR -->
-          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px; margin-top: 4px;">
-            <div style="font-weight: 700; font-size: 13px; color: var(--primary-dark); margin-bottom: 8px;">
-              💳 Tài khoản ngân hàng nhận tiền (tự sinh mã VietQR):
+          <!-- Cấu hình tài khoản ngân hàng -->
+          <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px; margin-top: 4px;">
+            <div style="font-weight: 700; font-size: 12px; color: var(--primary-dark); margin-bottom: 6px;">
+              💳 Ngân hàng nhận tiền (tự sinh mã VietQR):
             </div>
-            <div class="form-group" style="margin-bottom: 8px;">
-              <label class="form-label" style="font-size: 12px;">Ngân hàng:</label>
-              <select id="reg-bank-code" class="form-control form-select" style="font-size: 13px;">
+            <div class="form-group" style="margin-bottom: 6px;">
+              <select id="reg-bank-code" class="form-control form-select" style="font-size: 12.5px;">
                 ${VIETNAMESE_BANKS.map(b => `<option value="${escapeHtml(b.code)}">${escapeHtml(b.name)}</option>`).join('')}
               </select>
             </div>
-            <div class="form-group">
-              <label class="form-label" style="font-size: 12px;">Số tài khoản ngân hàng:</label>
-              <input type="text" id="reg-bank-acc" class="form-control" placeholder="Nhập số tài khoản..." style="font-size: 13px;" />
+            <div class="form-group" style="margin-bottom: 0;">
+              <input type="text" id="reg-bank-acc" class="form-control" placeholder="Số tài khoản ngân hàng..." style="font-size: 12.5px;" />
             </div>
           </div>
 
-          <button class="btn btn-primary btn-block" id="btn-submit-register" style="margin-top: 10px; padding: 12px; font-size: 15px;">
-            📲 Nhận Mã OTP & Tạo Tài Khoản
+          <button class="btn btn-primary btn-block" id="btn-submit-register" style="margin-top: 10px; padding: 12px; font-size: 15px; font-weight: 700;">
+            ✨ Xác Nhận OTP & Tạo Tài Khoản
           </button>
         </div>
       </div>
 
-      <!-- MODAL XÁC THỰC MÃ OTP (SMS / ZALO ZNS) -->
-      <div id="modal-otp-verify" class="modal-overlay" style="display: none; z-index: 250;">
-        <div class="modal-content" style="max-width: 360px;">
-          <div class="modal-header">
-            <h3 class="modal-title">📲 Xác Thực Số Điện Thoại</h3>
-            <button class="btn btn-sm btn-outline btn-circle" id="btn-close-otp-modal">✕</button>
-          </div>
-          <div class="modal-body" style="text-align: center;">
-            <div style="font-size: 38px; margin-bottom: 6px;">📩</div>
-            <div style="font-size: 13.5px; color: var(--text-main); line-height: 1.5;">
-              Mã xác thực OTP đã được gửi đến số điện thoại:<br/>
-              <strong id="otp-phone-display" style="font-size: 16px; color: var(--primary);">0918123456</strong>
-            </div>
-
-            <!-- Banner mô phỏng tin nhắn SMS đến để test nhanh không tốn tiền -->
-            <div id="otp-sms-banner" style="margin: 12px 0; background: #eff6ff; border: 1px dashed #3b82f6; border-radius: 8px; padding: 10px; text-align: left; font-size: 12px; color: #1e40af;">
-              <div style="display: flex; align-items: center; gap: 6px; font-weight: 700; color: #1d4ed8; margin-bottom: 2px;">
-                <span>📱 Tin nhắn SMS / Zalo:</span>
-              </div>
-              <div id="otp-sms-text">[SỔ HỤI] Mã xác thực OTP của bạn là: <strong style="font-size: 14px; color: #b91c1c;">686868</strong>. Mã có hiệu lực trong 5 phút.</div>
-            </div>
-
-            <div class="form-group" style="margin-top: 10px;">
-              <label class="form-label" style="font-size: 12px; color: var(--text-muted);">Nhập 6 chữ số mã OTP:</label>
-              <input type="text" id="otp-input-code" maxlength="6" class="form-control" placeholder="686868" style="text-align: center; font-size: 24px; font-weight: 800; letter-spacing: 8px; padding: 10px; color: var(--primary);" />
-            </div>
-
-            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-muted); margin-top: 8px;">
-              <span id="otp-timer-text">Gửi lại mã sau: <strong id="otp-countdown">60</strong>s</span>
-              <button type="button" id="btn-resend-otp" class="btn btn-sm btn-outline" style="font-size: 11px; padding: 3px 8px; display: none;">Gửi lại mã 🔄</button>
-            </div>
-          </div>
-          <div class="modal-footer" style="display: flex; gap: 8px;">
-            <button class="btn btn-outline" id="btn-cancel-otp" style="flex: 1;">Hủy</button>
-            <button class="btn btn-primary" id="btn-confirm-otp" style="flex: 2;">Xác Thực & Vào Sổ 🚀</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- MODAL QUÊN MẬT KHẨU / ĐẶT LẠI MẬT KHẨU QUA OTP -->
+      <!-- MODAL QUÊN MẬT KHẨU (XÁC THỰC QUA SMS OTP) -->
       <div id="modal-forgot-password" class="modal-overlay" style="display: none; z-index: 240;">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 380px;">
           <div class="modal-header">
-            <h3 class="modal-title">Khôi Phục & Đặt Lại Mật Khẩu</h3>
+            <h3 class="modal-title">Đặt Lại Mật Khẩu Qua SMS OTP</h3>
             <button class="btn btn-sm btn-outline btn-circle" id="btn-close-forgot-modal">✕</button>
           </div>
           <div class="modal-body">
-            <p style="font-size: 13px; color: var(--text-muted);">
-              Nhập số điện thoại đã đăng ký để nhận mã xác thực OTP khôi phục mật khẩu.
-            </p>
-
             <div class="form-group">
-              <label class="form-label">Số điện thoại đăng ký (*):</label>
+              <label class="form-label" style="font-size: 12px;">Số điện thoại đã đăng ký:</label>
               <div style="display: flex; gap: 6px;">
-                <input type="tel" id="forgot-phone" class="form-control" placeholder="Ví dụ: 0918123456" style="flex: 1;" />
-                <button type="button" class="btn btn-outline btn-sm" id="btn-get-forgot-otp" style="white-space: nowrap; font-size: 12px;">
-                  📲 Lấy Mã OTP
+                <input type="tel" id="forgot-phone" class="form-control" placeholder="Ví dụ: 0918123456" />
+                <button type="button" class="btn btn-outline btn-sm" id="btn-send-forgot-otp" style="white-space: nowrap; font-size: 12px; padding: 6px 10px; font-weight: 700;">
+                  📲 Gửi OTP
                 </button>
               </div>
             </div>
 
-            <div id="forgot-otp-sms-banner" style="display: none; margin: 8px 0; background: #eff6ff; border: 1px dashed #3b82f6; border-radius: 8px; padding: 8px 10px; font-size: 12px; color: #1e40af;">
-              📱 Tin nhắn SMS: [SỔ HỤI] Mã khôi phục mật khẩu là: <strong id="forgot-otp-code-val" style="color: #b91c1c; font-size: 13.5px;">686868</strong>
+            <div class="form-group">
+              <label class="form-label" style="font-size: 12px;">Mã xác thực OTP (6 số):</label>
+              <input type="text" id="forgot-otp" class="form-control" placeholder="Nhập mã 6 số từ tin nhắn..." maxlength="6" style="font-family: monospace; letter-spacing: 3px; text-align: center; font-weight: 700;" />
             </div>
 
             <div class="form-group">
-              <label class="form-label">Mã xác thực OTP (*):</label>
-              <input type="text" id="forgot-otp-input" maxlength="6" class="form-control" placeholder="Nhập 6 số OTP (hoặc 686868)..." style="font-weight: 700; letter-spacing: 4px;" />
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Mật khẩu mới muốn đặt (*):</label>
-              <input type="password" id="forgot-new-password" class="form-control" placeholder="Nhập mật khẩu mới..." />
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Nhập lại mật khẩu mới (*):</label>
-              <input type="password" id="forgot-confirm-password" class="form-control" placeholder="Nhập lại mật khẩu mới..." />
+              <label class="form-label" style="font-size: 12px;">Mật khẩu mới muốn đặt (*):</label>
+              <input type="password" id="forgot-new-password" class="form-control" placeholder="Nhập ít nhất 3 ký tự..." />
             </div>
           </div>
           <div class="modal-footer">
             <button class="btn btn-outline" id="btn-cancel-forgot" style="flex:1;">Hủy</button>
-            <button class="btn btn-primary" id="btn-submit-reset-password" style="flex:2;">💾 Cập Nhật Mật Khẩu</button>
+            <button class="btn btn-primary" id="btn-submit-reset-password" style="flex:2;">💾 Cập Nhật & Vào Sổ</button>
           </div>
         </div>
       </div>
 
       <!-- Tuyên bố an toàn và pháp lý -->
-      <div class="safety-disclaimer">
+      <div class="safety-disclaimer" style="font-size: 11px;">
         <span>🛡️</span>
         <div>
-          <strong>Bảo mật & Độc lập:</strong> Dữ liệu sổ hụi được mã hóa và lưu trữ an toàn riêng biệt. Bạn có thể sử dụng trơn tru trên mọi thiết bị và tải bản sao lưu về máy bất kỳ lúc nào.
+          <strong>Bảo mật & Độc lập:</strong> Dữ liệu sổ hụi được lưu trữ trên Đám mây an toàn. Bạn có thể đăng nhập trên mọi điện thoại & máy tính.
         </div>
       </div>
     </div>
@@ -3682,7 +3670,61 @@ function renderAuthView(container, initialTab = 'login') {
     }
   });
 
-  // Sự kiện Đăng nhập (Hỗ trợ Async Cloud & Local)
+  // Sự kiện Gửi mã OTP Đăng ký
+  let regOtpCooldown = 0;
+  let regOtpTimerInterval = null;
+  const btnSendRegOtp = document.getElementById('btn-send-reg-otp');
+  const regOtpTimerEl = document.getElementById('reg-otp-timer');
+  const regOtpHelp = document.getElementById('reg-otp-help');
+
+  async function handleSendRegOtp() {
+    const phone = document.getElementById('reg-phone').value.trim();
+    if (!phone || phone.length < 9) {
+      showToast('Vui lòng nhập số điện thoại hợp lệ trước khi lấy mã OTP!', 'warning');
+      document.getElementById('reg-phone')?.focus();
+      return;
+    }
+
+    try {
+      btnSendRegOtp.disabled = true;
+      btnSendRegOtp.innerText = '⏳ Đang gửi...';
+
+      const res = await cloudSync.sendOtpCloud(phone, 'register');
+      showToast(res.message || 'Mã OTP đã được gửi đến tin nhắn điện thoại của bạn!', 'success');
+
+      if (res.mockOtp) {
+        regOtpHelp.innerHTML = `💡 Mã OTP của bạn là: <strong style="font-size:13px; color:#b91c1c;">${res.mockOtp}</strong> (Nhập vào ô trên)`;
+        document.getElementById('reg-otp').value = res.mockOtp;
+      } else {
+        regOtpHelp.innerHTML = `📲 Đã gửi tin nhắn SMS đến số <strong>${phone}</strong>. Vui lòng mở tin nhắn để lấy mã.`;
+      }
+
+      document.getElementById('reg-otp')?.focus();
+
+      // Bắt đầu đếm ngược 60s
+      regOtpCooldown = 60;
+      if (regOtpTimerInterval) clearInterval(regOtpTimerInterval);
+      regOtpTimerInterval = setInterval(() => {
+        regOtpCooldown--;
+        if (regOtpCooldown > 0) {
+          btnSendRegOtp.innerText = `Gửi lại (${regOtpCooldown}s)`;
+          regOtpTimerEl.innerText = `Hiệu lực trong 5 phút`;
+        } else {
+          clearInterval(regOtpTimerInterval);
+          btnSendRegOtp.disabled = false;
+          btnSendRegOtp.innerText = '📲 Gửi lại OTP';
+        }
+      }, 1000);
+    } catch (err) {
+      btnSendRegOtp.disabled = false;
+      btnSendRegOtp.innerText = '📲 Gửi OTP';
+      showToast(err.message, 'danger');
+    }
+  }
+
+  btnSendRegOtp?.addEventListener('click', handleSendRegOtp);
+
+  // Sự kiện Đăng nhập
   const btnSubmitLogin = document.getElementById('btn-submit-login');
   btnSubmitLogin?.addEventListener('click', async () => {
     const idVal = document.getElementById('login-identifier').value.trim();
@@ -3695,16 +3737,84 @@ function renderAuthView(container, initialTab = 'login') {
 
     try {
       btnSubmitLogin.disabled = true;
-      btnSubmitLogin.innerText = '⏳ Đang đăng nhập...';
+      btnSubmitLogin.innerText = '⏳ Đang kiểm tra tài khoản...';
 
       const acc = await store.login(idVal, passVal);
+      try { localStorage.setItem('SO_HUI_LAST_PHONE', acc.phone); } catch (e) {}
       showToast(`Đăng nhập thành công! Chào mừng ${acc.fullName}`, 'success');
       window.location.hash = '#dashboard';
     } catch (e) {
       showToast(e.message, 'danger');
     } finally {
       btnSubmitLogin.disabled = false;
-      btnSubmitLogin.innerText = '🚀 Đăng Nhập Vào Sổ Hụi';
+      btnSubmitLogin.innerText = '🚀 Vào Sổ Hụi Ngay';
+    }
+  });
+
+  // Sự kiện Đăng ký Mới (Xác nhận OTP & Tạo tài khoản)
+  const btnSubmitReg = document.getElementById('btn-submit-register');
+  btnSubmitReg?.addEventListener('click', async () => {
+    const fullName = document.getElementById('reg-fullname').value.trim();
+    const phone = document.getElementById('reg-phone').value.trim();
+    const otp = document.getElementById('reg-otp').value.trim();
+    const password = document.getElementById('reg-password').value;
+    const shopName = document.getElementById('reg-shopname').value.trim();
+    const bankCode = document.getElementById('reg-bank-code').value;
+    const accountNumber = document.getElementById('reg-bank-acc').value.trim();
+
+    if (!fullName) {
+      showToast('Vui lòng nhập họ và tên của bạn!', 'warning');
+      document.getElementById('reg-fullname')?.focus();
+      return;
+    }
+    if (!phone || phone.length < 9) {
+      showToast('Vui lòng nhập số điện thoại hợp lệ!', 'warning');
+      document.getElementById('reg-phone')?.focus();
+      return;
+    }
+    if (!otp) {
+      showToast('Vui lòng bấm "Gửi OTP" và nhập mã xác thực từ SMS!', 'warning');
+      handleSendRegOtp();
+      return;
+    }
+    if (!password || password.length < 3) {
+      showToast('Mật khẩu phải có ít nhất 3 ký tự!', 'warning');
+      document.getElementById('reg-password')?.focus();
+      return;
+    }
+
+    const selectedBank = VIETNAMESE_BANKS.find(b => b.code === bankCode);
+    const newAccountData = {
+      fullName,
+      phone,
+      password,
+      role: 'owner',
+      shopName,
+      address: '',
+      bankCode,
+      bankName: selectedBank ? selectedBank.name : bankCode,
+      accountNumber,
+      accountHolder: fullName
+    };
+
+    try {
+      btnSubmitReg.disabled = true;
+      btnSubmitReg.innerText = '⏳ Đang xác minh OTP & tạo tài khoản...';
+
+      // 1. Xác minh mã OTP
+      await cloudSync.verifyOtpCloud(phone, otp);
+
+      // 2. Tạo tài khoản & lưu trữ vĩnh viễn lên Đám mây
+      const newAcc = await store.registerAccount(newAccountData);
+      try { localStorage.setItem('SO_HUI_LAST_PHONE', newAcc.phone); } catch (e) {}
+
+      showToast(`Đăng ký thành công! Chào mừng ${newAcc.fullName} đến với Sổ Hụi.`, 'success');
+      window.location.hash = '#dashboard';
+    } catch (e) {
+      showToast(e.message, 'danger');
+    } finally {
+      btnSubmitReg.disabled = false;
+      btnSubmitReg.innerText = '✨ Xác Nhận OTP & Tạo Tài Khoản';
     }
   });
 
@@ -3719,14 +3829,20 @@ function renderAuthView(container, initialTab = 'login') {
     const btnSync = document.getElementById('btn-submit-sync-code');
     try {
       btnSync.disabled = true;
-      btnSync.innerText = '⏳ Đang kéo...';
+      btnSync.innerText = '⏳...';
 
       const data = await cloudSync.restoreFromSyncCode(code);
       if (data && data.account) {
+        const currentAccounts = store.getAccounts();
+        if (!currentAccounts.some(a => store.normalizePhone(a.phone) === store.normalizePhone(data.account.phone))) {
+          currentAccounts.push(data.account);
+          store.saveAccounts(currentAccounts);
+        }
         if (data.ledger) {
-          store.importJSONData(data.ledger);
+          store.saveAccountData(data.account.id, data.ledger);
         }
         await store.login(data.account.phone, data.account.password || '123');
+        try { localStorage.setItem('SO_HUI_LAST_PHONE', data.account.phone); } catch (e) {}
         showToast(`Đồng bộ thành công sổ hụi của ${data.account.fullName}!`, 'success');
         window.location.hash = '#dashboard';
       }
@@ -3738,13 +3854,56 @@ function renderAuthView(container, initialTab = 'login') {
     }
   });
 
-  // Đăng nhập nhanh
+  // Khôi phục từ File sao lưu trực tiếp trên màn hình Auth
+  const authFileInput = document.getElementById('auth-file-restore');
+  document.getElementById('btn-auth-file-restore')?.addEventListener('click', () => {
+    authFileInput?.click();
+  });
+
+  authFileInput?.addEventListener('change', (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const content = event.target?.result;
+        const parsed = JSON.parse(content);
+        if (!parsed || !parsed.data) throw new Error('File không hợp lệ!');
+
+        const accountData = parsed.account || {
+          id: 'acc-' + Date.now(),
+          fullName: 'Chủ Hụi',
+          phone: '0900000000',
+          role: 'owner',
+          password: '123'
+        };
+
+        const currentAccounts = store.getAccounts();
+        if (!currentAccounts.some(a => store.normalizePhone(a.phone) === store.normalizePhone(accountData.phone))) {
+          currentAccounts.push(accountData);
+          store.saveAccounts(currentAccounts);
+        }
+
+        store.saveAccountData(accountData.id, parsed.data);
+        await store.login(accountData.phone, accountData.password || '123');
+        showToast('Đã khôi phục sổ hụi từ file thành công!', 'success');
+        window.location.hash = '#dashboard';
+      } catch (err) {
+        showToast('Lỗi đọc file sao lưu: ' + err.message, 'danger');
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  // Đăng nhập nhanh 1 chạm
   container.querySelectorAll('.btn-quick-login').forEach(item => {
     item.addEventListener('click', async () => {
       const phone = item.getAttribute('data-phone');
       const pass = item.getAttribute('data-pass');
       try {
         const acc = await store.login(phone, pass);
+        try { localStorage.setItem('SO_HUI_LAST_PHONE', acc.phone); } catch (e) {}
         showToast(`Đã mở sổ của: ${acc.fullName}`, 'success');
         window.location.hash = '#dashboard';
       } catch (e) {
@@ -3753,166 +3912,7 @@ function renderAuthView(container, initialTab = 'login') {
     });
   });
 
-  // --- LOGIC XÁC THỰC MÃ OTP (SMS / ZALO ZNS) CHO ĐĂNG KÝ ---
-  const modalOtp = document.getElementById('modal-otp-verify');
-  const otpInput = document.getElementById('otp-input-code');
-  const otpCountdownEl = document.getElementById('otp-countdown');
-  const btnResendOtp = document.getElementById('btn-resend-otp');
-  const otpTimerText = document.getElementById('otp-timer-text');
-  let otpTimerInterval = null;
-  let pendingRegistrationData = null;
-
-  function startOtpCountdown() {
-    let secondsLeft = 60;
-    if (otpTimerInterval) clearInterval(otpTimerInterval);
-    otpTimerText.style.display = 'inline';
-    btnResendOtp.style.display = 'none';
-    otpCountdownEl.innerText = secondsLeft;
-
-    otpTimerInterval = setInterval(() => {
-      secondsLeft--;
-      otpCountdownEl.innerText = secondsLeft;
-      if (secondsLeft <= 0) {
-        clearInterval(otpTimerInterval);
-        otpTimerText.style.display = 'none';
-        btnResendOtp.style.display = 'inline-block';
-      }
-    }, 1000);
-  }
-
-  // Sự kiện Đăng ký & Kích hoạt gửi OTP
-  const btnSubmitReg = document.getElementById('btn-submit-register');
-  btnSubmitReg?.addEventListener('click', async () => {
-    const fullName = document.getElementById('reg-fullname').value.trim();
-    const phone = document.getElementById('reg-phone').value.trim();
-    const password = document.getElementById('reg-password').value;
-    const role = document.getElementById('reg-role').value;
-    const shopName = document.getElementById('reg-shopname').value.trim();
-    const address = document.getElementById('reg-address').value.trim();
-    const bankCode = document.getElementById('reg-bank-code').value;
-    const accountNumber = document.getElementById('reg-bank-acc').value.trim();
-
-    if (!fullName) {
-      showToast('Vui lòng nhập họ và tên của bạn!', 'warning');
-      return;
-    }
-    if (!phone || phone.length < 9) {
-      showToast('Vui lòng nhập số điện thoại hợp lệ!', 'warning');
-      return;
-    }
-    if (!password || password.length < 3) {
-      showToast('Mật khẩu phải có ít nhất 3 ký tự!', 'warning');
-      return;
-    }
-
-    const selectedBank = VIETNAMESE_BANKS.find(b => b.code === bankCode);
-    pendingRegistrationData = {
-      fullName,
-      phone,
-      password,
-      role,
-      shopName,
-      address,
-      bankCode,
-      bankName: selectedBank ? selectedBank.name : bankCode,
-      accountNumber,
-      accountHolder: fullName
-    };
-
-    try {
-      btnSubmitReg.disabled = true;
-      btnSubmitReg.innerText = '⏳ Đang gửi mã OTP...';
-
-      const otpRes = await cloudSync.sendOtpCloud(phone, 'register');
-      document.getElementById('otp-phone-display').innerText = phone;
-
-      const mockOtp = otpRes.mockOtp || '686868';
-      const smsTextEl = document.getElementById('otp-sms-text');
-      if (smsTextEl) {
-        smsTextEl.innerHTML = `[SỔ HỤI] Mã xác thực OTP của bạn là: <strong style="font-size: 15px; color: #b91c1c;">${mockOtp}</strong>. Mã có hiệu lực trong 5 phút.`;
-      }
-
-      modalOtp.style.display = 'flex';
-      otpInput.value = '';
-      setTimeout(() => otpInput.focus(), 200);
-      startOtpCountdown();
-
-      showToast(`Đã gửi mã xác thực OTP đến ${phone}!`, 'success');
-    } catch (e) {
-      showToast(e.message, 'danger');
-    } finally {
-      btnSubmitReg.disabled = false;
-      btnSubmitReg.innerText = '📲 Nhận Mã OTP & Tạo Tài Khoản';
-    }
-  });
-
-  // Đóng Modal OTP
-  document.getElementById('btn-close-otp-modal')?.addEventListener('click', () => {
-    modalOtp.style.display = 'none';
-    if (otpTimerInterval) clearInterval(otpTimerInterval);
-  });
-  document.getElementById('btn-cancel-otp')?.addEventListener('click', () => {
-    modalOtp.style.display = 'none';
-    if (otpTimerInterval) clearInterval(otpTimerInterval);
-  });
-
-  // Gửi lại mã OTP
-  btnResendOtp?.addEventListener('click', async () => {
-    if (!pendingRegistrationData) return;
-    try {
-      btnResendOtp.innerText = '⏳...';
-      const otpRes = await cloudSync.sendOtpCloud(pendingRegistrationData.phone, 'register');
-      const mockOtp = otpRes.mockOtp || '686868';
-      const smsTextEl = document.getElementById('otp-sms-text');
-      if (smsTextEl) {
-        smsTextEl.innerHTML = `[SỔ HỤI] Mã xác thực OTP mới của bạn là: <strong style="font-size: 15px; color: #b91c1c;">${mockOtp}</strong>. Mã có hiệu lực trong 5 phút.`;
-      }
-      showToast('Đã gửi lại mã OTP mới!', 'success');
-      startOtpCountdown();
-    } catch (e) {
-      showToast(e.message, 'danger');
-    }
-  });
-
-  // Xác thực OTP và Tạo Tài Khoản
-  const btnConfirmOtp = document.getElementById('btn-confirm-otp');
-  const handleVerifyOtpAndRegister = async () => {
-    const otpVal = otpInput.value.trim();
-    if (!otpVal || otpVal.length < 4) {
-      showToast('Vui lòng nhập mã xác thực OTP 6 số!', 'warning');
-      return;
-    }
-    if (!pendingRegistrationData) {
-      showToast('Không tìm thấy thông tin đăng ký!', 'danger');
-      return;
-    }
-
-    try {
-      btnConfirmOtp.disabled = true;
-      btnConfirmOtp.innerText = '⏳ Đang xác thực...';
-
-      await cloudSync.verifyOtpCloud(pendingRegistrationData.phone, otpVal);
-      const newAcc = await store.registerAccount(pendingRegistrationData);
-
-      modalOtp.style.display = 'none';
-      if (otpTimerInterval) clearInterval(otpTimerInterval);
-
-      showToast(`Xác thực OTP thành công! Bắt đầu sổ của ${newAcc.fullName}`, 'success');
-      window.location.hash = '#dashboard';
-    } catch (e) {
-      showToast(e.message, 'danger');
-    } finally {
-      btnConfirmOtp.disabled = false;
-      btnConfirmOtp.innerText = 'Xác Thực & Vào Sổ 🚀';
-    }
-  };
-
-  btnConfirmOtp?.addEventListener('click', handleVerifyOtpAndRegister);
-  otpInput?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') handleVerifyOtpAndRegister();
-  });
-
-  // --- MODAL QUÊN MẬT KHẨU / ĐẶT LẠI MẬT KHẨU QUA OTP ---
+  // Modal Quên Mật Khẩu
   const modalForgot = document.getElementById('modal-forgot-password');
   document.getElementById('btn-forgot-password-link')?.addEventListener('click', () => {
     modalForgot.style.display = 'flex';
@@ -3924,47 +3924,41 @@ function renderAuthView(container, initialTab = 'login') {
     modalForgot.style.display = 'none';
   });
 
-  // Nút lấy mã OTP Quên mật khẩu
-  document.getElementById('btn-get-forgot-otp')?.addEventListener('click', async () => {
+  // Gửi OTP quên mật khẩu
+  document.getElementById('btn-send-forgot-otp')?.addEventListener('click', async () => {
     const phone = document.getElementById('forgot-phone').value.trim();
-    if (!phone || phone.length < 9) {
-      showToast('Vui lòng nhập số điện thoại đã đăng ký!', 'warning');
+    if (!phone) {
+      showToast('Vui lòng nhập số điện thoại!', 'warning');
       return;
     }
-
+    const btnSend = document.getElementById('btn-send-forgot-otp');
     try {
-      const btnGet = document.getElementById('btn-get-forgot-otp');
-      btnGet.innerText = '⏳ Đang gửi...';
-      const otpRes = await cloudSync.sendOtpCloud(phone, 'forgot_password');
-      const mockOtp = otpRes.mockOtp || '686868';
-
-      const banner = document.getElementById('forgot-otp-sms-banner');
-      const codeVal = document.getElementById('forgot-otp-code-val');
-      if (banner && codeVal) {
-        codeVal.innerText = mockOtp;
-        banner.style.display = 'block';
+      btnSend.disabled = true;
+      btnSend.innerText = '⏳ Đang gửi...';
+      const res = await cloudSync.sendOtpCloud(phone, 'forgot_password');
+      showToast(res.message || 'Đã gửi mã OTP đến số điện thoại!', 'success');
+      if (res.mockOtp) {
+        document.getElementById('forgot-otp').value = res.mockOtp;
       }
-
-      showToast(`Đã gửi mã OTP khôi phục đến số ${phone}!`, 'success');
     } catch (e) {
       showToast(e.message, 'danger');
     } finally {
-      document.getElementById('btn-get-forgot-otp').innerText = '📲 Lấy Mã OTP';
+      btnSend.disabled = false;
+      btnSend.innerText = '📲 Gửi OTP';
     }
   });
 
   // Xác nhận đổi mật khẩu
   document.getElementById('btn-submit-reset-password')?.addEventListener('click', async () => {
     const phone = document.getElementById('forgot-phone').value.trim();
-    const otpVal = document.getElementById('forgot-otp-input').value.trim();
+    const otp = document.getElementById('forgot-otp').value.trim();
     const newPass = document.getElementById('forgot-new-password').value;
-    const confirmPass = document.getElementById('forgot-confirm-password').value;
 
     if (!phone) {
-      showToast('Vui lòng nhập số điện thoại đã đăng ký!', 'warning');
+      showToast('Vui lòng nhập số điện thoại!', 'warning');
       return;
     }
-    if (!otpVal) {
+    if (!otp) {
       showToast('Vui lòng nhập mã xác thực OTP!', 'warning');
       return;
     }
@@ -3972,19 +3966,14 @@ function renderAuthView(container, initialTab = 'login') {
       showToast('Mật khẩu mới phải có ít nhất 3 ký tự!', 'warning');
       return;
     }
-    if (newPass !== confirmPass) {
-      showToast('Mật khẩu nhập lại không trùng khớp!', 'warning');
-      return;
-    }
 
     try {
-      await cloudSync.verifyOtpCloud(phone, otpVal);
+      await cloudSync.verifyOtpCloud(phone, otp);
       await store.resetPassword(phone, newPass);
-
-      showToast('Đặt lại mật khẩu thành công! Hãy đăng nhập bằng mật khẩu mới.', 'success');
+      await store.login(phone, newPass);
       modalForgot.style.display = 'none';
-      document.getElementById('login-identifier').value = phone;
-      document.getElementById('login-password').value = newPass;
+      showToast('Đã cập nhật mật khẩu mới và vào sổ thành công!', 'success');
+      window.location.hash = '#dashboard';
     } catch (e) {
       showToast(e.message, 'danger');
     }

@@ -3,39 +3,10 @@
  * Đồng bộ hai chiều (Push/Pull) dữ liệu Sổ hụi giữa các thiết bị thời gian thực
  */
 
+const CLOUD_KV_BUCKET = 'https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR';
+
 const globalAccounts = global.__SO_HUI_CLOUD_ACCOUNTS || new Map();
 global.__SO_HUI_CLOUD_ACCOUNTS = globalAccounts;
-
-// Bucket lưu trữ đám mây vĩnh viễn (Persistent Global Cloud Store)
-const CLOUD_KV_URL = 'https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR';
-
-async function fetchFromPersistentCloud(key) {
-  try {
-    if (typeof fetch === 'function') {
-      const res = await fetch(`${CLOUD_KV_URL}/${key}`);
-      if (res.ok) {
-        return await res.json();
-      }
-    }
-  } catch (e) {
-    console.warn('Persistent Cloud Read Error:', e.message);
-  }
-  return null;
-}
-
-async function saveToPersistentCloud(key, data) {
-  try {
-    if (typeof fetch === 'function') {
-      await fetch(`${CLOUD_KV_URL}/${key}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-    }
-  } catch (e) {
-    console.warn('Persistent Cloud Write Error:', e.message);
-  }
-}
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -50,6 +21,47 @@ function setCors(res) {
 function normalizePhone(phone) {
   if (!phone) return '';
   return phone.toString().replace(/[\s.-]/g, '').trim();
+}
+
+async function getCloudUser(phone) {
+  const clean = normalizePhone(phone);
+  if (!clean) return null;
+
+  if (globalAccounts.has(clean)) {
+    return globalAccounts.get(clean);
+  }
+
+  try {
+    if (typeof fetch === 'function') {
+      const res = await fetch(`${CLOUD_KV_BUCKET}/usr_${clean}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data) {
+          globalAccounts.set(clean, data);
+          return data;
+        }
+      }
+    }
+  } catch (e) {}
+
+  return null;
+}
+
+async function saveCloudUser(phone, userData) {
+  const clean = normalizePhone(phone);
+  if (!clean) return;
+
+  globalAccounts.set(clean, userData);
+
+  try {
+    if (typeof fetch === 'function') {
+      await fetch(`${CLOUD_KV_BUCKET}/usr_${clean}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData)
+      });
+    }
+  } catch (e) {}
 }
 
 module.exports = async function handler(req, res) {
@@ -72,17 +84,9 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ success: false, message: 'Thiếu số điện thoại' });
     }
 
-    let userData = globalAccounts.get(cleanPhone);
-    if (!userData) {
-      const persisted = await fetchFromPersistentCloud(`usr_${cleanPhone}`);
-      if (persisted && persisted.account) {
-        userData = persisted;
-        globalAccounts.set(cleanPhone, userData);
-      }
-    }
+    let userData = await getCloudUser(cleanPhone);
 
     if (!userData) {
-      // Nếu chưa có trên cloud, khởi tạo bản ghi
       userData = {
         account: {
           id: 'acc-' + Date.now(),
@@ -94,7 +98,6 @@ module.exports = async function handler(req, res) {
         },
         ledger: ledgerData || null
       };
-      globalAccounts.set(cleanPhone, userData);
     }
 
     // 1. PUSH (Đồng bộ từ thiết bị lên Cloud)
@@ -105,8 +108,7 @@ module.exports = async function handler(req, res) {
 
       userData.ledger = ledgerData;
       userData.lastSyncedAt = new Date().toISOString();
-      globalAccounts.set(cleanPhone, userData);
-      await saveToPersistentCloud(`usr_${cleanPhone}`, userData);
+      await saveCloudUser(cleanPhone, userData);
 
       return res.status(200).json({
         success: true,

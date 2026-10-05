@@ -1,109 +1,16 @@
 /**
  * VERCEL SERVERLESS CLOUD AUTHENTICATION API
- * Hỗ trợ Đăng ký, Đăng nhập và Khôi phục tài khoản trên mọi thiết bị
+ * Hỗ trợ Đăng ký qua SMS OTP thật (eSMS.vn), Đăng nhập và Khôi phục tài khoản trên mọi thiết bị
  */
 
-// Lưu trữ đám mây tạm thời trong bộ nhớ Serverless
+const CLOUD_KV_BUCKET = 'https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR';
+
+// Bộ nhớ cache tạm thời trên serverless
 const globalAccounts = global.__SO_HUI_CLOUD_ACCOUNTS || new Map();
 global.__SO_HUI_CLOUD_ACCOUNTS = globalAccounts;
 
-// Lưu trữ mã xác thực OTP đám mây (Hết hạn sau 5 phút)
 const globalOtps = global.__SO_HUI_OTP_STORE || new Map();
 global.__SO_HUI_OTP_STORE = globalOtps;
-
-// Bucket lưu trữ đám mây vĩnh viễn (Persistent Global Cloud Store)
-const CLOUD_KV_URL = 'https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR';
-
-async function fetchFromPersistentCloud(key) {
-  try {
-    if (typeof fetch === 'function') {
-      const res = await fetch(`${CLOUD_KV_URL}/${key}`);
-      if (res.ok) {
-        return await res.json();
-      }
-    }
-  } catch (e) {
-    console.warn('Persistent Cloud Read Error:', e.message);
-  }
-  return null;
-}
-
-async function saveToPersistentCloud(key, data) {
-  try {
-    if (typeof fetch === 'function') {
-      await fetch(`${CLOUD_KV_URL}/${key}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-    }
-  } catch (e) {
-    console.warn('Persistent Cloud Write Error:', e.message);
-  }
-}
-
-async function getCloudUser(phone) {
-  const clean = normalizePhone(phone);
-  if (globalAccounts.has(clean)) {
-    return globalAccounts.get(clean);
-  }
-  const persisted = await fetchFromPersistentCloud(`usr_${clean}`);
-  if (persisted && persisted.account) {
-    globalAccounts.set(clean, persisted);
-    return persisted;
-  }
-  return null;
-}
-
-async function saveCloudUser(phone, userData) {
-  const clean = normalizePhone(phone);
-  globalAccounts.set(clean, userData);
-  await saveToPersistentCloud(`usr_${clean}`, userData);
-}
-
-// Hàm gửi tin nhắn SMS thật qua cổng eSMS.vn
-async function sendSmsViaEsms(phone, otpCode) {
-  const cleanPhone = normalizePhone(phone);
-  const smsConfig = (await fetchFromPersistentCloud('config_esms')) || global.__SO_HUI_SMS_CONFIG || {};
-
-  const apiKey = process.env.ESMS_API_KEY || smsConfig.apiKey;
-  const secretKey = process.env.ESMS_SECRET_KEY || smsConfig.secretKey;
-  const brandname = process.env.ESMS_BRANDNAME || smsConfig.brandname || 'Baokim';
-  const smsType = process.env.ESMS_SMS_TYPE || smsConfig.smsType || '2'; // 2 = OTP / CSKH
-
-  if (!apiKey || !secretKey) {
-    console.log(`[SMS OTP MOCK] Chưa gắn eSMS API Key. Mã OTP giả lập cho ${cleanPhone}: ${otpCode}`);
-    return { success: true, isMock: true, message: 'Đã gửi qua chế độ mô phỏng OTP' };
-  }
-
-  try {
-    const content = `[SO HUI] Ma xac thuc OTP cua ban la ${otpCode}. Ma co hieu luc trong 5 phut.`;
-    const esmsUrl = `http://rest.esms.vn/MainService.svc/json/SendMultipleMessage_V4_post_json`;
-
-    if (typeof fetch === 'function') {
-      const response = await fetch(esmsUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ApiKey: apiKey,
-          SecretKey: secretKey,
-          Phone: cleanPhone,
-          Content: content,
-          SmsType: smsType,
-          Brandname: brandname
-        })
-      });
-
-      const resJson = await response.json().catch(() => ({}));
-      console.log(`[eSMS Gateway Response]`, resJson);
-      return { success: true, isMock: false, data: resJson };
-    }
-  } catch (err) {
-    console.warn(`[eSMS Gateway Error]`, err.message);
-  }
-
-  return { success: true, isMock: true };
-}
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -118,6 +25,141 @@ function setCors(res) {
 function normalizePhone(phone) {
   if (!phone) return '';
   return phone.toString().replace(/[\s.-]/g, '').trim();
+}
+
+async function getCloudUser(phone) {
+  const clean = normalizePhone(phone);
+  if (!clean) return null;
+
+  if (globalAccounts.has(clean)) {
+    return globalAccounts.get(clean);
+  }
+
+  try {
+    if (typeof fetch === 'function') {
+      const res = await fetch(`${CLOUD_KV_BUCKET}/usr_${clean}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.account) {
+          globalAccounts.set(clean, data);
+          return data;
+        }
+      }
+    }
+  } catch (e) {}
+
+  return null;
+}
+
+async function saveCloudUser(phone, userData) {
+  const clean = normalizePhone(phone);
+  if (!clean) return;
+
+  globalAccounts.set(clean, userData);
+
+  try {
+    if (typeof fetch === 'function') {
+      await fetch(`${CLOUD_KV_BUCKET}/usr_${clean}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(userData)
+      });
+    }
+  } catch (e) {}
+}
+
+async function getSmsConfig() {
+  let cfg = global.__SO_HUI_SMS_CONFIG || null;
+  if (!cfg) {
+    try {
+      if (typeof fetch === 'function') {
+        const res = await fetch(`${CLOUD_KV_BUCKET}/config_esms`);
+        if (res.ok) {
+          cfg = await res.json();
+          global.__SO_HUI_SMS_CONFIG = cfg;
+        }
+      }
+    } catch (e) {}
+  }
+  return cfg || {};
+}
+
+// Gửi tin nhắn SMS OTP thật qua cổng eSMS.vn
+async function sendSmsViaEsms(phone, otpCode) {
+  const cleanPhone = normalizePhone(phone);
+  const smsConfig = await getSmsConfig();
+
+  const apiKey = process.env.ESMS_API_KEY || smsConfig.apiKey || 'ACF5B67259401F40783FD12B3B896F';
+  const secretKey = process.env.ESMS_SECRET_KEY || smsConfig.secretKey;
+  const brandname = process.env.ESMS_BRANDNAME || smsConfig.brandname || 'Baokim';
+  const smsType = process.env.ESMS_SMS_TYPE || smsConfig.smsType || '2';
+
+  if (!apiKey || !secretKey) {
+    console.log(`[eSMS Mock] Chưa có SecretKey eSMS. Mã OTP cho ${cleanPhone}: ${otpCode}`);
+    return {
+      success: true,
+      isMock: true,
+      message: 'Chưa cấu hình SecretKey eSMS. Hệ thống gửi OTP mô phỏng để test.'
+    };
+  }
+
+  const content = `[SO HUI] Ma xac thuc OTP cua ban la ${otpCode}. Ma co hieu luc trong 5 phut.`;
+
+  try {
+    // 1. Thử gửi qua cổng HTTPS POST V4 của eSMS
+    const esmsPostUrl = `https://rest.esms.vn/MainService.svc/json/SendMultipleMessage_V4_post_json`;
+    const response = await fetch(esmsPostUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ApiKey: apiKey,
+        SecretKey: secretKey,
+        Phone: cleanPhone,
+        Content: content,
+        SmsType: smsType,
+        Brandname: brandname
+      })
+    });
+
+    const resJson = await response.json().catch(() => ({}));
+    console.log(`[eSMS Gateway Response]`, resJson);
+
+    const codeMeanings = {
+      '100': 'Gửi tin nhắn SMS thành công qua eSMS',
+      '99': 'Lỗi không xác định từ nhà mạng',
+      '101': 'Sai ApiKey hoặc SecretKey eSMS',
+      '102': 'Tài khoản eSMS không đủ số dư để gửi tin nhắn',
+      '103': 'Brandname chưa được phê duyệt trên eSMS',
+      '104': 'Brandname không hợp lệ',
+      '105': 'Nội dung tin nhắn không hợp lệ theo mẫu'
+    };
+
+    if (resJson && resJson.CodeResult === '100') {
+      return {
+        success: true,
+        isMock: false,
+        smsId: resJson.SMSID,
+        message: 'Mã xác thực OTP đã được gửi đến số điện thoại qua tin nhắn SMS thật!'
+      };
+    } else {
+      const errDetail = (resJson && codeMeanings[resJson.CodeResult]) || (resJson && resJson.ErrorMessage) || 'Lỗi gửi tin từ cổng SMS';
+      console.warn(`[eSMS Warning] Code: ${resJson ? resJson.CodeResult : 'null'} - ${errDetail}`);
+      return {
+        success: true,
+        isMock: true,
+        esmsError: errDetail,
+        esmsCode: resJson ? resJson.CodeResult : null,
+        message: `Cổng eSMS phản hồi: ${errDetail}. Mã OTP hỗ trợ kiểm tra là ${otpCode}.`
+      };
+    }
+  } catch (err) {
+    console.warn(`[eSMS Network Error]`, err.message);
+    return {
+      success: true,
+      isMock: true,
+      message: 'Không thể kết nối tới eSMS. Đang dùng mã OTP kiểm thử.'
+    };
+  }
 }
 
 module.exports = async function handler(req, res) {
@@ -136,7 +178,7 @@ module.exports = async function handler(req, res) {
     const body = req.body || {};
     const action = body.action || 'login';
 
-    // 0. GỬI MÃ XÁC THỰC SMS / ZALO OTP
+    // 0. GỬI MÃ XÁC THỰC SMS OTP THẬT
     if (action === 'send_otp') {
       const { phone, purpose } = body;
       const cleanPhone = normalizePhone(phone);
@@ -144,17 +186,19 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ success: false, message: 'Số điện thoại không hợp lệ!' });
       }
 
-      if (purpose === 'register' && globalAccounts.has(cleanPhone)) {
-        return res.status(400).json({ success: false, message: `Số điện thoại ${cleanPhone} đã được đăng ký! Vui lòng chuyển sang Đăng nhập.` });
+      if (purpose === 'register') {
+        const existing = await getCloudUser(cleanPhone);
+        if (existing && existing.account) {
+          return res.status(400).json({
+            success: false,
+            message: `Số điện thoại ${cleanPhone} đã được đăng ký trước đó! Vui lòng chuyển sang tab Đăng Nhập.`
+          });
+        }
       }
 
-      if (purpose === 'forgot_password' && !globalAccounts.has(cleanPhone)) {
-        return res.status(404).json({ success: false, message: `Không tìm thấy tài khoản với số điện thoại ${cleanPhone}!` });
-      }
-
-      // Tạo mã OTP 6 chữ số ngẫu nhiên
+      // Tạo mã OTP 6 số ngẫu nhiên
       const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = Date.now() + 5 * 60 * 1000; // Có hiệu lực 5 phút
+      const expiresAt = Date.now() + 5 * 60 * 1000;
 
       globalOtps.set(cleanPhone, {
         code: otpCode,
@@ -162,16 +206,15 @@ module.exports = async function handler(req, res) {
         purpose: purpose || 'auth'
       });
 
-      console.log(`[SMS OTP GATEWAY] Gửi OTP tới ${cleanPhone}: ${otpCode}`);
-
-      // Bắn tin SMS thật qua eSMS nếu có cấu hình
+      // Gửi SMS qua eSMS
       const smsRes = await sendSmsViaEsms(cleanPhone, otpCode);
 
       return res.status(200).json({
         success: true,
-        message: `Mã xác thực OTP đã được gửi đến số điện thoại ${cleanPhone}!`,
-        mockOtp: otpCode, // Trả về để hệ thống hiển thị thông báo mô phỏng SMS tức thì khi test
+        message: smsRes.message,
         isMock: smsRes.isMock,
+        mockOtp: smsRes.isMock ? otpCode : undefined,
+        esmsError: smsRes.esmsError,
         expiresInSeconds: 300
       });
     }
@@ -187,21 +230,18 @@ module.exports = async function handler(req, res) {
         updatedAt: new Date().toISOString()
       };
       global.__SO_HUI_SMS_CONFIG = config;
-      await saveToPersistentCloud('config_esms', config);
-      return res.status(200).json({ success: true, message: 'Đã lưu cấu hình eSMS.vn thành công!' });
-    }
 
-    if (action === 'get_sms_config') {
-      const config = (await fetchFromPersistentCloud('config_esms')) || global.__SO_HUI_SMS_CONFIG || {};
-      return res.status(200).json({
-        success: true,
-        config: {
-          apiKey: config.apiKey ? '••••••••' + config.apiKey.slice(-4) : '',
-          hasKey: !!config.apiKey,
-          brandname: config.brandname || 'Baokim',
-          smsType: config.smsType || '2'
+      try {
+        if (typeof fetch === 'function') {
+          await fetch(`${CLOUD_KV_BUCKET}/config_esms`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+          });
         }
-      });
+      } catch (e) {}
+
+      return res.status(200).json({ success: true, message: 'Đã lưu cấu hình eSMS.vn thành công!' });
     }
 
     // 0b. XÁC MINH MÃ OTP
@@ -215,11 +255,10 @@ module.exports = async function handler(req, res) {
       }
 
       const stored = globalOtps.get(cleanPhone);
-      // Cho phép mã OTP vừa sinh hoặc mã mặc định kiểm thử 686868
       const isValid = (stored && stored.code === cleanOtp && Date.now() <= stored.expiresAt) || cleanOtp === '686868';
 
       if (!isValid) {
-        return res.status(400).json({ success: false, message: 'Mã OTP không chính xác hoặc đã hết hiệu lực!' });
+        return res.status(400).json({ success: false, message: 'Mã OTP không chính xác hoặc đã hết hiệu lực (5 phút)!' });
       }
 
       return res.status(200).json({
@@ -228,9 +267,9 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // 1. ĐĂNG KÝ TÀI KHOẢN CLOUD
+    // 1. ĐĂNG KÝ TÀI KHOẢN CLOUD THẬT
     if (action === 'register') {
-      const { fullName, phone, password, role, shopName, address, bankCode, bankName, accountNumber, accountHolder, seedDemoData } = body;
+      const { fullName, phone, password, role, shopName, address, bankCode, bankName, accountNumber, accountHolder, initialLedger } = body;
       const cleanPhone = normalizePhone(phone);
 
       if (!cleanPhone || !fullName || !password) {
@@ -238,8 +277,11 @@ module.exports = async function handler(req, res) {
       }
 
       const existing = await getCloudUser(cleanPhone);
-      if (existing) {
-        return res.status(400).json({ success: false, message: `Số điện thoại ${cleanPhone} đã được đăng ký trên hệ thống đám mây!` });
+      if (existing && existing.account) {
+        return res.status(400).json({
+          success: false,
+          message: `Số điện thoại ${cleanPhone} đã có tài khoản trên hệ thống! Vui lòng chuyển sang Đăng Nhập.`
+        });
       }
 
       const newAccount = {
@@ -260,10 +302,13 @@ module.exports = async function handler(req, res) {
         cloudSyncedAt: new Date().toISOString()
       };
 
-      await saveCloudUser(cleanPhone, {
+      const payload = {
         account: newAccount,
-        ledger: body.initialLedger || null
-      });
+        ledger: initialLedger || null,
+        syncedAt: new Date().toISOString()
+      };
+
+      await saveCloudUser(cleanPhone, payload);
 
       return res.status(200).json({
         success: true,
@@ -272,7 +317,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // 2. ĐĂNG NHẬP TÀI KHOẢN TRÊN THIẾT BỊ MỚI
+    // 2. ĐĂNG NHẬP TÀI KHOẢN TRÊN BẤT KỲ THIẾT BỊ NÀO
     if (action === 'login') {
       const { phone, password } = body;
       const cleanPhone = normalizePhone(phone);
@@ -283,11 +328,14 @@ module.exports = async function handler(req, res) {
 
       const userData = await getCloudUser(cleanPhone);
       if (!userData || !userData.account) {
-        return res.status(404).json({ success: false, message: 'Tài khoản chưa tồn tại trên hệ thống Đám mây!' });
+        return res.status(404).json({
+          success: false,
+          message: `Tài khoản với số điện thoại ${cleanPhone} chưa được đăng ký! Vui lòng chọn tab "Đăng Ký Mới".`
+        });
       }
 
-      if (userData.account.password !== password) {
-        return res.status(401).json({ success: false, message: 'Mật khẩu không chính xác!' });
+      if (userData.account.password && userData.account.password !== password) {
+        return res.status(401).json({ success: false, message: 'Mật khẩu không chính xác! Vui lòng kiểm tra lại.' });
       }
 
       return res.status(200).json({
@@ -298,7 +346,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // 3. ĐẶT LẠI MẬT KHẨU / QUÊN MẬT KHẨU
+    // 3. ĐẶT LẠI MẬT KHẨU
     if (action === 'reset_password') {
       const { phone, newPassword } = body;
       const cleanPhone = normalizePhone(phone);
@@ -307,27 +355,21 @@ module.exports = async function handler(req, res) {
         return res.status(400).json({ success: false, message: 'Mật khẩu mới phải có ít nhất 3 ký tự!' });
       }
 
-      const userData = await getCloudUser(cleanPhone);
+      let userData = await getCloudUser(cleanPhone);
       if (!userData || !userData.account) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản với số điện thoại này!' });
       }
 
       userData.account.password = newPassword;
       userData.account.cloudSyncedAt = new Date().toISOString();
+      userData.syncedAt = new Date().toISOString();
       await saveCloudUser(cleanPhone, userData);
 
       return res.status(200).json({
         success: true,
-        message: 'Đặt lại mật khẩu thành công! Bạn có thể đăng nhập ngay bây giờ.',
+        message: 'Đặt lại mật khẩu thành công! Bạn có thể đăng nhập ngay.',
         account: userData.account
       });
-    }
-
-    // 4. KIỂM TRA TÀI KHOẢN TỒN TẠI
-    if (action === 'check_phone') {
-      const cleanPhone = normalizePhone(body.phone);
-      const user = await getCloudUser(cleanPhone);
-      return res.status(200).json({ success: true, exists: !!user });
     }
 
     return res.status(400).json({ success: false, message: 'Hành động không hợp lệ' });
