@@ -5,12 +5,12 @@
 
 const CLOUD_KV_BUCKET = 'https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR';
 
-// Cấu hình eSMS.vn mặc định của Chủ Sổ Hụi
-const DEFAULT_ESMS_CONFIG = {
-  apiKey: 'ACF5B67259401F40783FD12B3B896F',
-  secretKey: '0731640B5A2E1FD9D21FDE34C7FF62',
-  brandname: 'SOHUI 4.0',
-  smsType: '2'
+// Cấu hình Cổng eSMS.vn chính thức theo mẫu phê duyệt nhà mạng
+const ESMS_CONFIG = {
+  apiKey: process.env.ESMS_API_KEY || 'ACF5B67259401F40783FD12B3B896F',
+  secretKey: process.env.ESMS_SECRET_KEY || '0731640B5A2E1FD9D21FDE34C7FF62',
+  brandname: process.env.ESMS_BRANDNAME || 'Baotrixemay', // Brandname mẫu test đã duyệt nhà mạng
+  smsType: process.env.ESMS_SMS_TYPE || '2'              // SmsType 2 (Brandname CSKH/OTP)
 };
 
 // Bộ nhớ cache tạm thời trên serverless
@@ -76,33 +76,16 @@ async function saveCloudUser(phone, userData) {
   } catch (e) {}
 }
 
-async function getSmsConfig() {
-  let cfg = global.__SO_HUI_SMS_CONFIG || null;
-  if (!cfg) {
-    try {
-      if (typeof fetch === 'function') {
-        const res = await fetch(`${CLOUD_KV_BUCKET}/config_esms`);
-        if (res.ok) {
-          cfg = await res.json();
-          global.__SO_HUI_SMS_CONFIG = cfg;
-        }
-      }
-    } catch (e) {}
-  }
-  return cfg || DEFAULT_ESMS_CONFIG;
-}
-
 // Gửi tin nhắn SMS OTP thật qua cổng eSMS.vn
 async function sendSmsViaEsms(phone, otpCode) {
   const cleanPhone = normalizePhone(phone);
-  const smsConfig = await getSmsConfig();
 
-  const apiKey = process.env.ESMS_API_KEY || smsConfig.apiKey || DEFAULT_ESMS_CONFIG.apiKey;
-  const secretKey = process.env.ESMS_SECRET_KEY || smsConfig.secretKey || DEFAULT_ESMS_CONFIG.secretKey;
-  const brandname = process.env.ESMS_BRANDNAME || smsConfig.brandname || DEFAULT_ESMS_CONFIG.brandname;
-  const smsType = process.env.ESMS_SMS_TYPE || smsConfig.smsType || DEFAULT_ESMS_CONFIG.smsType;
+  const apiKey = ESMS_CONFIG.apiKey;
+  const secretKey = ESMS_CONFIG.secretKey;
+  const brandname = ESMS_CONFIG.brandname;
+  const smsType = ESMS_CONFIG.smsType;
 
-  const content = `[SO HUI] Ma xac thuc OTP cua ban la ${otpCode}. Ma co hieu luc trong 5 phut.`;
+  const content = `${otpCode} la ma xac minh dang ky Baotrixemay cua ban`;
 
   const codeMeanings = {
     '100': 'Gửi tin nhắn SMS thành công qua eSMS',
@@ -115,20 +98,23 @@ async function sendSmsViaEsms(phone, otpCode) {
   };
 
   try {
-    // 1. Gửi qua HTTPS POST V4 của eSMS
+    // Gửi qua HTTPS POST V4 của eSMS (Brandname Baotrixemay đã duyệt với nhà mạng)
     const esmsPostUrl = `https://rest.esms.vn/MainService.svc/json/SendMultipleMessage_V4_post_json`;
+
+    const requestBody = {
+      ApiKey: apiKey,
+      SecretKey: secretKey,
+      Phone: cleanPhone,
+      Content: content,
+      SmsType: smsType || '2',
+      Brandname: brandname || 'Baotrixemay',
+      IsUnicode: '0'
+    };
+
     const response = await fetch(esmsPostUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ApiKey: apiKey,
-        SecretKey: secretKey,
-        Phone: cleanPhone,
-        Content: content,
-        SmsType: smsType,
-        Brandname: brandname,
-        IsUnicode: '0'
-      })
+      body: JSON.stringify(requestBody)
     });
 
     const resJson = await response.json().catch(() => ({}));
@@ -223,10 +209,10 @@ module.exports = async function handler(req, res) {
     if (action === 'save_sms_config') {
       const { apiKey, secretKey, brandname, smsType } = body;
       const config = {
-        apiKey: (apiKey || DEFAULT_ESMS_CONFIG.apiKey).trim(),
-        secretKey: (secretKey || DEFAULT_ESMS_CONFIG.secretKey).trim(),
-        brandname: (brandname || DEFAULT_ESMS_CONFIG.brandname).trim(),
-        smsType: smsType || DEFAULT_ESMS_CONFIG.smsType,
+        apiKey: (apiKey || ESMS_CONFIG.apiKey).trim(),
+        secretKey: (secretKey || ESMS_CONFIG.secretKey).trim(),
+        brandname: (brandname || ESMS_CONFIG.brandname).trim(),
+        smsType: smsType || ESMS_CONFIG.smsType,
         updatedAt: new Date().toISOString()
       };
       global.__SO_HUI_SMS_CONFIG = config;
