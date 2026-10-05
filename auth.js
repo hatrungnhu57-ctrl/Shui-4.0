@@ -5,12 +5,12 @@
 
 const CLOUD_KV_BUCKET = 'https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR';
 
-// Cấu hình eSMS.vn mặc định của Chủ Sổ Hụi
-const DEFAULT_ESMS_CONFIG = {
-  apiKey: 'ACF5B67259401F40783FD12B3B896F',
-  secretKey: '0731640B5A2E1FD9D21FDE34C7FF62',
-  brandname: 'Baokim',
-  smsType: '2'
+// Cấu hình Cổng eSMS.vn cố định cho Hệ thống Sổ Hụi
+const ESMS_CONFIG = {
+  apiKey: process.env.ESMS_API_KEY || 'ACF5B67259401F40783FD12B3B896F',
+  secretKey: process.env.ESMS_SECRET_KEY || '0731640B5A2E1FD9D21FDE34C7FF62',
+  brandname: process.env.ESMS_BRANDNAME || '', // Để trống khi dùng đầu số cố định
+  smsType: process.env.ESMS_SMS_TYPE || '8'   // Đầu số cố định 10 số (không cần duyệt Brandname)
 };
 
 // Bộ nhớ cache tạm thời trên serverless
@@ -76,31 +76,14 @@ async function saveCloudUser(phone, userData) {
   } catch (e) {}
 }
 
-async function getSmsConfig() {
-  let cfg = global.__SO_HUI_SMS_CONFIG || null;
-  if (!cfg) {
-    try {
-      if (typeof fetch === 'function') {
-        const res = await fetch(`${CLOUD_KV_BUCKET}/config_esms`);
-        if (res.ok) {
-          cfg = await res.json();
-          global.__SO_HUI_SMS_CONFIG = cfg;
-        }
-      }
-    } catch (e) {}
-  }
-  return cfg || DEFAULT_ESMS_CONFIG;
-}
-
 // Gửi tin nhắn SMS OTP thật qua cổng eSMS.vn
 async function sendSmsViaEsms(phone, otpCode) {
   const cleanPhone = normalizePhone(phone);
-  const smsConfig = await getSmsConfig();
 
-  const apiKey = process.env.ESMS_API_KEY || smsConfig.apiKey || DEFAULT_ESMS_CONFIG.apiKey;
-  const secretKey = process.env.ESMS_SECRET_KEY || smsConfig.secretKey || DEFAULT_ESMS_CONFIG.secretKey;
-  const brandname = process.env.ESMS_BRANDNAME || smsConfig.brandname || DEFAULT_ESMS_CONFIG.brandname;
-  const smsType = process.env.ESMS_SMS_TYPE || smsConfig.smsType || DEFAULT_ESMS_CONFIG.smsType;
+  const apiKey = ESMS_CONFIG.apiKey;
+  const secretKey = ESMS_CONFIG.secretKey;
+  const brandname = ESMS_CONFIG.brandname;
+  const smsType = ESMS_CONFIG.smsType;
 
   const content = `[SO HUI] Ma xac thuc OTP cua ban la ${otpCode}. Ma co hieu luc trong 5 phut.`;
 
@@ -115,20 +98,26 @@ async function sendSmsViaEsms(phone, otpCode) {
   };
 
   try {
-    // 1. Gửi qua HTTPS POST V4 của eSMS
+    // 1. Gửi qua HTTPS POST V4 của eSMS (Đầu số cố định SmsType 8 hoặc 4)
     const esmsPostUrl = `https://rest.esms.vn/MainService.svc/json/SendMultipleMessage_V4_post_json`;
+
+    const requestBody = {
+      ApiKey: apiKey,
+      SecretKey: secretKey,
+      Phone: cleanPhone,
+      Content: content,
+      SmsType: smsType || '8',
+      IsUnicode: '0'
+    };
+
+    if (brandname && smsType === '2') {
+      requestBody.Brandname = brandname;
+    }
+
     const response = await fetch(esmsPostUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ApiKey: apiKey,
-        SecretKey: secretKey,
-        Phone: cleanPhone,
-        Content: content,
-        SmsType: smsType,
-        Brandname: brandname,
-        IsUnicode: '0'
-      })
+      body: JSON.stringify(requestBody)
     });
 
     const resJson = await response.json().catch(() => ({}));
