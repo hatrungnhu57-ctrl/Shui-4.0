@@ -1,9 +1,10 @@
 /**
  * VERCEL SERVERLESS CLOUD SYNC API
- * Đồng bộ hai chiều (Push/Pull) dữ liệu Sổ hụi giữa các thiết bị thời gian thực
+ * Đồng bộ hai chiều (Push/Pull) dữ liệu Sổ hụi giữa các thiết bị qua Supabase Cloud
  */
 
-const CLOUD_KV_BUCKET = 'https://kvdb.io/4yZJ7vM9L1P3a8Qx5cE7wR';
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://kmpxbwtshhpbrkbhcmfv.supabase.co';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttcHhid3RzaGhwYnJrYmhjbWZ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExNjk0NTQsImV4cCI6MjEwNjc0NTQ1NH0.LPtPas5M5DQXv3PEUFWlLBNOoIW70rdGwWd0TZMGpl8';
 
 const globalAccounts = global.__SO_HUI_CLOUD_ACCOUNTS || new Map();
 global.__SO_HUI_CLOUD_ACCOUNTS = globalAccounts;
@@ -23,6 +24,51 @@ function normalizePhone(phone) {
   return phone.toString().replace(/[\s.-]/g, '').trim();
 }
 
+async function getSupabaseKey(key) {
+  try {
+    if (typeof fetch === 'function') {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/sohui_store?key=eq.${encodeURIComponent(key)}&select=*`, {
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+        }
+      });
+      if (res.ok) {
+        const rows = await res.json();
+        if (Array.isArray(rows) && rows.length > 0 && rows[0].data) {
+          return rows[0].data;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[Supabase Read Warning]:', e.message);
+  }
+  return null;
+}
+
+async function saveSupabaseKey(key, data) {
+  try {
+    if (typeof fetch === 'function') {
+      await fetch(`${SUPABASE_URL}/rest/v1/sohui_store`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({
+          key: key,
+          data: data,
+          updated_at: new Date().toISOString()
+        })
+      });
+    }
+  } catch (e) {
+    console.warn('[Supabase Write Warning]:', e.message);
+  }
+}
+
 async function getCloudUser(phone) {
   const clean = normalizePhone(phone);
   if (!clean) return null;
@@ -31,18 +77,11 @@ async function getCloudUser(phone) {
     return globalAccounts.get(clean);
   }
 
-  try {
-    if (typeof fetch === 'function') {
-      const res = await fetch(`${CLOUD_KV_BUCKET}/usr_${clean}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data) {
-          globalAccounts.set(clean, data);
-          return data;
-        }
-      }
-    }
-  } catch (e) {}
+  const data = await getSupabaseKey(`usr_${clean}`);
+  if (data) {
+    globalAccounts.set(clean, data);
+    return data;
+  }
 
   return null;
 }
@@ -52,16 +91,7 @@ async function saveCloudUser(phone, userData) {
   if (!clean) return;
 
   globalAccounts.set(clean, userData);
-
-  try {
-    if (typeof fetch === 'function') {
-      await fetch(`${CLOUD_KV_BUCKET}/usr_${clean}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData)
-      });
-    }
-  } catch (e) {}
+  await saveSupabaseKey(`usr_${clean}`, userData);
 }
 
 module.exports = async function handler(req, res) {
